@@ -42,6 +42,12 @@ namespace TheLostHill.Core
 
             AsyncOperation asyncLoad = SceneManager.LoadSceneAsync(sceneName);
             
+            if (asyncLoad == null)
+            {
+                Debug.LogError($"[SceneLoader] ERROR: No se puede cargar la escena '{sceneName}'. ¿Está añadida en Build Settings?");
+                yield break;
+            }
+
             // Impide que la escena se active inmediatamente si se desea esperar sinc auto
             // asyncLoad.allowSceneActivation = false; 
 

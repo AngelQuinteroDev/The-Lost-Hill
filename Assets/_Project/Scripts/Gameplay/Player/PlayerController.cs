@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.InputSystem;
 using TheLostHill.Network.Sync;
 
 namespace TheLostHill.Gameplay.Player
@@ -16,6 +17,10 @@ namespace TheLostHill.Gameplay.Player
         public float SprintSpeed = 6.0f;
         public float RotationSpeed = 10f;
 
+        [Header("Components")]
+        public Camera PlayerCamera;
+        public AudioListener PlayerListener;
+
         private CharacterController _cc;
         private ClientSidePrediction _prediction;
         
@@ -28,16 +33,40 @@ namespace TheLostHill.Gameplay.Player
             _prediction = GetComponent<ClientSidePrediction>();
         }
 
+        private void Start()
+        {
+            // Configuración de cámara
+            if (PlayerCamera != null)
+            {
+                PlayerCamera.enabled = IsLocalPlayer;
+                // También el listener de audio para evitar warnings de Unity
+                if (PlayerListener != null) PlayerListener.enabled = IsLocalPlayer;
+            }
+        }
+
         private void Update()
         {
             if (!IsLocalPlayer) return;
 
-            // 1. Recoger Inputs
-            float h = Input.GetAxisRaw("Horizontal");
-            float v = Input.GetAxisRaw("Vertical");
-            bool sprint = Input.GetKey(KeyCode.LeftShift);
+            // 1. Recoger Inputs (Nueva API de Input System)
+            Vector2 moveInput = Vector2.zero;
+            bool sprint = false;
 
-            Vector3 inputDir = new Vector3(h, 0, v).normalized;
+            if (Keyboard.current != null)
+            {
+                float h = 0;
+                if (Keyboard.current.aKey.isPressed || Keyboard.current.leftArrowKey.isPressed) h -= 1;
+                if (Keyboard.current.dKey.isPressed || Keyboard.current.rightArrowKey.isPressed) h += 1;
+
+                float v = 0;
+                if (Keyboard.current.sKey.isPressed || Keyboard.current.downArrowKey.isPressed) v -= 1;
+                if (Keyboard.current.wKey.isPressed || Keyboard.current.upArrowKey.isPressed) v += 1;
+
+                moveInput = new Vector2(h, v);
+                sprint = Keyboard.current.leftShiftKey.isPressed;
+            }
+
+            Vector3 inputDir = new Vector3(moveInput.x, 0, moveInput.y).normalized;
 
             // 2. Client Side Prediction lo procesa y aplica al CC localmente
             // Además guardará este input para enviarlo por red (PlayerNetworkSync se encarga)

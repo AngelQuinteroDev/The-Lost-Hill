@@ -15,9 +15,9 @@ namespace TheLostHill.Core
         public const int MaxPacketSize = 2048;
 
         // ── Timeouts (segundos) ──────────────────────────────────
-        public const float ConnectionTimeout = 10f;
-        public const float TcpKeepAliveInterval = 5f;
-        public const float DisconnectTimeout = 15f;
+        public const float ConnectionTimeout = 15f;
+        public const float TcpKeepAliveInterval = 10f;
+        public const float DisconnectTimeout = 30f;
 
         // ── Ping ─────────────────────────────────────────────────
         public const float PingInterval = 1f;

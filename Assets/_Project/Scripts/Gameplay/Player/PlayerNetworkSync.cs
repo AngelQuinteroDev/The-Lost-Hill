@@ -1,31 +1,63 @@
 using UnityEngine;
 using TheLostHill.Core;
+using TheLostHill.Network.Sync;
+using TheLostHill.Network.Shared;
 
 namespace TheLostHill.Gameplay.Player
 {
-    /// <summary>
-    /// Se encarga de la sincronización en red específica de un jugador.
-    /// Si es local: toma el input de PlayerController/CSP y lo envía con la frecuencia adecuada.
-    /// Si es remoto: toma los datos del WorldState y alimenta al InterpolationSystem.
-    /// </summary>
     [RequireComponent(typeof(PlayerController))]
     public class PlayerNetworkSync : MonoBehaviour
     {
         private PlayerController _controller;
         private float _lastSendTime;
-        
         public int AssignedPlayerId { get; set; }
+
+        private InterpolationSystem _interpolation;
+        private ClientSidePrediction _prediction;
+
+        [Header("Visuals")]
+        public Color[] PlayerColors = new Color[]
+        {
+            Color.red,
+            Color.blue,
+            new Color(1f, 0.5f, 0f), // Orange
+            Color.green,
+            new Color(0.5f, 0f, 0.5f), // Purple
+            Color.cyan,
+            Color.magenta,
+            Color.yellow
+        };
 
         private void Awake()
         {
             _controller = GetComponent<PlayerController>();
+            _interpolation = GetComponent<InterpolationSystem>();
+            _prediction = GetComponent<ClientSidePrediction>();
+        }
+
+        public void ApplyColor(int colorIndex)
+        {
+            if (colorIndex < 0 || colorIndex >= PlayerColors.Length) colorIndex = 0;
+            
+            Color targetColor = PlayerColors[colorIndex];
+            Renderer[] renderers = GetComponentsInChildren<Renderer>();
+            
+            foreach (var renderer in renderers)
+            {
+                // Crear una copia única del material para este jugador
+                renderer.material.color = targetColor;
+            }
         }
 
         private void Update()
         {
-            if (_controller.IsLocalPlayer && GameManager.Instance.Role != NetworkRole.None)
+            if (_controller.IsLocalPlayer)
             {
-                SyncLocalState();
+                // Solo enviamos si estamos en red
+                if (GameManager.Instance.Role != NetworkRole.None)
+                {
+                    SyncLocalState();
+                }
             }
         }
 
@@ -35,18 +67,46 @@ namespace TheLostHill.Gameplay.Player
             {
                 _lastSendTime = Time.time;
                 
-                // TODO: En el update real, tomamos el último sequence number de ClientSidePrediction
-                // y los inputs acumulados, y enviamos PlayerInputMessage vía GameManager.Instance.ClientHandler...
+                // Enviar nuestra posición actual al Host por UDP
+                var posMsg = new PlayerStateMessage
+                {
+                    SenderId = AssignedPlayerId,
+                    PosX = transform.position.x,
+                    PosY = transform.position.y,
+                    PosZ = transform.position.z,
+                    RotY = transform.rotation.eulerAngles.y
+                };
+
+                if (GameManager.Instance.Role == NetworkRole.Host)
+                {
+                    // Si somos el host, simplemente actualizamos el registro localmente (o nos lo enviamos a nosotros mismos)
+                    // En este MVP, el HostManager ya tiene acceso a nuestra posición física vía Registry.
+                }
+                else
+                {
+                    GameManager.Instance.ClientHandler.SendTCP(posMsg);
+                }
             }
         }
 
         /// <summary>
-        /// Llamado cuando recibimos posición corregida del servidor.
+        /// Llamado cuando recibimos posición desde el servidor (WorldState).
         /// </summary>
-        public void ApplyServerState(Vector3 position, float rotationY, int lastProcessedInput)
+        public void ApplyServerState(Vector3 position, float rotationY)
         {
-            // TODO: si es local, pasarlo a CSP Reconcile()
-            // si es remoto, pasarlo a InterpolationSystem
+            if (_controller.IsLocalPlayer)
+            {
+                // Opcional: Reconciliación si la discrepancia es mucha
+                // transform.position = position; 
+            }
+            else
+            {
+                // Entidad remota: Alimerntar el sistema de interpolación
+                if (_interpolation != null)
+                {
+                    _interpolation.AddSnapshot(position, rotationY, Time.time);
+                }
+            }
         }
     }
 }

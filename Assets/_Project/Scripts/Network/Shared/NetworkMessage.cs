@@ -110,6 +110,7 @@ namespace TheLostHill.Network.Shared
         public int PlayerId;
         public float PosX, PosY, PosZ;
         public float RotY;
+        public int ColorIndex;
         public bool IsAlive;
     }
 

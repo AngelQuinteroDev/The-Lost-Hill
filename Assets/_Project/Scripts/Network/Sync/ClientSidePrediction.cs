@@ -26,6 +26,8 @@ namespace TheLostHill.Network.Sync
         [Tooltip("Referencia al controlador local para simular la predicción/reconciliación")]
         private CharacterController _characterController; // Asume el uso de CharacterController
         public float Speed = 5f;
+        public float Gravity = 20f;
+        private float _verticalVelocity = 0f;
 
         private void Awake()
         {
@@ -58,8 +60,21 @@ namespace TheLostHill.Network.Sync
         {
             if (_characterController != null)
             {
+                // Manejo de Gravedad
+                if (_characterController.isGrounded)
+                {
+                    _verticalVelocity = -0.5f; // Mantener pegado al suelo
+                }
+                else
+                {
+                    _verticalVelocity -= Gravity * record.DeltaTime;
+                }
+
                 float currentSpeed = record.Sprint ? Speed * 1.5f : Speed;
-                _characterController.Move(record.InputVector * currentSpeed * record.DeltaTime);
+                Vector3 move = record.InputVector * currentSpeed;
+                move.y = _verticalVelocity;
+
+                _characterController.Move(move * record.DeltaTime);
             }
         }
 

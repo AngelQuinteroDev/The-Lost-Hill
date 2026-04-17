@@ -35,6 +35,9 @@ namespace TheLostHill.Network.Host
         public int Score { get; set; }
         public int LastProcessedInputSeq { get; set; }
 
+        public UnityEngine.Vector3 LastPosition { get; set; }
+        public float LastRotationY { get; set; }
+
         // ── Buffer TCP ──────────────────────────────────────────
         /// <summary>Buffer para acumular datos TCP parciales (framing).</summary>
         public byte[] ReceiveBuffer { get; private set; }

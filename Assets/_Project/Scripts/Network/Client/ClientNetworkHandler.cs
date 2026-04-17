@@ -31,16 +31,12 @@ namespace TheLostHill.Network.Client
         public bool IsConnected { get; private set; }
         public bool IsConnecting { get; private set; }
 
-        // ── Sockets ─────────────────────────────────────────────
+        // ── Hilos y Sockets ─────────────────────────────────────
         private TcpClient _tcpClient;
         private NetworkStream _tcpStream;
-        private UdpClient _udpClient;
-        private IPEndPoint _udpServerEndPoint;
-
-        // ── Hilos ───────────────────────────────────────────────
         private Thread _tcpReceiveThread;
-        private Thread _udpReceiveThread;
         private volatile bool _isRunning;
+        private string _cachedVersion; // Para evitar errores de hilos con Application.version
 
         // ── Eventos ─────────────────────────────────────────────
         public event Action OnConnected;
@@ -61,7 +57,6 @@ namespace TheLostHill.Network.Client
         private void Update()
         {
             if (!_isRunning) return;
-
             ProcessInboundMessages();
         }
 
@@ -88,6 +83,7 @@ namespace TheLostHill.Network.Client
             PlayerName = playerName;
             IsConnecting = true;
             _isRunning = true;
+            _cachedVersion = Application.version; // Capturamos en el Main Thread
             IncomingQueue.Clear();
 
             Thread connectThread = new Thread(ConnectLoop)
@@ -122,7 +118,7 @@ namespace TheLostHill.Network.Client
                 var requestMsg = new ConnectRequestMessage
                 {
                     PlayerName = PlayerName,
-                    GameVersion = Application.version
+                    GameVersion = _cachedVersion
                 };
 
                 byte[] data = PacketSerializer.SerializeTCP(requestMsg);
@@ -154,35 +150,20 @@ namespace TheLostHill.Network.Client
                     LocalPlayerId = accept.AssignedPlayerId;
                     ColorIndex = accept.AssignedColorIndex;
                     Debug.Log($"[Client] Conectado. PlayerId: {LocalPlayerId}");
+
+                    IncomingQueue.EnqueueInbound(accept);
                 }
                 else
                 {
                     throw new Exception("Respuesta inesperada");
                 }
 
-                // 4. Inicializar UDP
-                _udpClient = new UdpClient();
-                _udpServerEndPoint = new IPEndPoint(IPAddress.Parse(ServerIP), UdpPort);
-                
-                // Enviar un mensaje UDP inicial para hacer 'hole punching' / informar al host de nuestro IP/Port
-                var joinedMsgUdp = new KeepAliveMessage { SenderId = LocalPlayerId };
-                SendUDP(joinedMsgUdp);
-
                 IsConnected = true;
                 IsConnecting = false;
-
-                // Lanzar evento en main thread
-                // No llamamos Invoke() aquí porque estamos en otro hilo, pero Unity exige main thread para algunas cosas.
-                // Encolamos un mensaje "dummy" para dispararlo en Update() o usamos dispatching
-                IncomingQueue.EnqueueInbound(accept);
 
                 // 5. Iniciar hilos de recepción
                 _tcpReceiveThread = new Thread(TcpReceiveLoop) { IsBackground = true, Name = "Client-TCP-Recv" };
                 _tcpReceiveThread.Start();
-
-                _udpReceiveThread = new Thread(UdpReceiveLoop) { IsBackground = true, Name = "Client-UDP-Recv" };
-                _udpReceiveThread.Start();
-
             }
             catch (Exception e)
             {
@@ -228,10 +209,10 @@ namespace TheLostHill.Network.Client
 
             try { _tcpStream?.Close(); } catch { }
             try { _tcpClient?.Close(); } catch { }
-            try { _udpClient?.Close(); } catch { }
-
+            
+            _reconnectHandler?.StopReconnect();
+            
             _tcpReceiveThread?.Join(500);
-            _udpReceiveThread?.Join(500);
 
             Debug.Log("[Client] Desconectado.");
             OnDisconnected?.Invoke();
@@ -264,41 +245,27 @@ namespace TheLostHill.Network.Client
                         IncomingQueue.EnqueueInbound(msg);
                     }
                 }
-                catch (Exception)
+                catch (System.IO.IOException)
                 {
+                    Debug.LogWarning("[Client] System.IO.IOException: Conexión cerrada por el host u OS.");
+                    if (_isRunning) break;
+                }
+                catch (System.ObjectDisposedException)
+                {
+                    Debug.LogWarning("[Client] System.ObjectDisposedException: El stream TCP ya está cerrado.");
+                    if (_isRunning) break;
+                }
+                catch (Exception e)
+                {
+                    Debug.LogError($"[Client] Error crítico en TcpReceiveLoop: {e.GetType().Name} - {e.Message}\n{e.StackTrace}");
                     if (_isRunning) break;
                 }
             }
 
             if (_isRunning)
             {
-                Debug.LogWarning("[Client] Conexión TCP perdida.");
+                Debug.LogWarning("[Client] Conexión TCP perdida. (Fin del bucle Receive)");
                 IncomingQueue.EnqueueInbound(new DisconnectMessage { SenderId = 0 }); // Signal loss
-            }
-        }
-
-        private void UdpReceiveLoop()
-        {
-            while (_isRunning && IsConnected)
-            {
-                try
-                {
-                    IPEndPoint remoteEP = new IPEndPoint(IPAddress.Any, 0);
-                    byte[] data = _udpClient.Receive(ref remoteEP);
-
-                    if (data.Length < 1) continue;
-
-                    NetworkMessage msg = PacketSerializer.Deserialize(data);
-                    if (msg != null)
-                    {
-                        IncomingQueue.EnqueueInbound(msg);
-                    }
-                }
-                catch (SocketException) when (!_isRunning) { break; }
-                catch (Exception e)
-                {
-                    if (_isRunning) Debug.LogWarning($"[Client] Error recibiendo UDP: {e.Message}");
-                }
             }
         }
 
@@ -322,20 +289,6 @@ namespace TheLostHill.Network.Client
             {
                 Disconnect();
             }
-        }
-
-        public void SendUDP(NetworkMessage msg)
-        {
-            if (!IsConnected || _udpClient == null) return;
-
-            msg.SenderId = LocalPlayerId;
-            byte[] data = PacketSerializer.SerializeUDP(msg);
-
-            try
-            {
-                _udpClient.Send(data, data.Length, _udpServerEndPoint);
-            }
-            catch (Exception) { }
         }
 
         // ═════════════════════════════════════════════════════════

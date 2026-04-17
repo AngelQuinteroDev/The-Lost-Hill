@@ -27,28 +27,31 @@ namespace TheLostHill.Core
 
         private GameManager _gm;
 
-        private void Start()
+        private void Awake()
         {
             _gm = GameManager.Instance;
-            
-            if (_gm.ClientHandler != null)
+        }
+
+        private void Update()
+        {
+            // Intentar suscribirse si aún no lo estamos y el ClientHandler ya existe
+            if (_gm != null && _gm.ClientHandler != null && !_isSubscribedToClient)
             {
                 _gm.ClientHandler.OnMessageReceived += HandleClientMessage;
+                _isSubscribedToClient = true;
             }
         }
 
+        private bool _isSubscribedToClient = false;
+
         private void OnDestroy()
         {
-            if (_gm != null && _gm.ClientHandler != null)
+            if (_gm != null && _gm.ClientHandler != null && _isSubscribedToClient)
             {
                 _gm.ClientHandler.OnMessageReceived -= HandleClientMessage;
             }
         }
 
-        /// <summary>
-        /// Intenta cambiar el estado. Si es Host, cambia y hace broadcast.
-        /// Si es cliente pero el cambio no es sincronizado, simplemente cambia.
-        /// </summary>
         public void ChangeState(GameState newState)
         {
             if (CurrentState == newState) return;
@@ -58,6 +61,9 @@ namespace TheLostHill.Core
 
             Debug.Log($"[GameState] {oldState} -> {CurrentState}");
 
+            // Lógica de carga de escenas automática
+            HandleSceneTransition(newState);
+
             OnStateChanged?.Invoke(oldState, CurrentState);
 
             // Si somos Host, lo notificamos a todos
@@ -65,10 +71,27 @@ namespace TheLostHill.Core
             {
                 var msg = new GameStateChangeMessage
                 {
-                    SenderId = 0, // 0 = Host authority
+                    SenderId = 0,
                     NewState = (byte)CurrentState
                 };
                 _gm.HostManager.BroadcastTCP(msg);
+            }
+        }
+
+        private void HandleSceneTransition(GameState state)
+        {
+            switch (state)
+            {
+                case GameState.MainMenu:
+                    SceneLoader.Instance.LoadScene("MainScene");
+                    break;
+                case GameState.Lobby:
+                    // El lobby suele ser un panel en la escena de menú o una escena propia
+                    // Si es una escena propia: SceneLoader.Instance.LoadScene("LobbyScene");
+                    break;
+                case GameState.Playing:
+                    SceneLoader.Instance.LoadScene("GameplayScene");
+                    break;
             }
         }
 
@@ -79,10 +102,7 @@ namespace TheLostHill.Core
                 GameState newState = (GameState)stateChange.NewState;
                 if (CurrentState != newState)
                 {
-                    GameState oldState = CurrentState;
-                    CurrentState = newState;
-                    Debug.Log($"[GameState] Recibido desde Host: {oldState} -> {CurrentState}");
-                    OnStateChanged?.Invoke(oldState, CurrentState);
+                    ChangeState(newState); // Usar ChangeState para que también cargue la escena localmente
                 }
             }
         }

@@ -56,7 +56,13 @@ namespace TheLostHill.Network.Client
             _isReconnecting = false;
         }
 
-        public void ResetAttempts()
+        public void StopReconnect()
+        {
+            StopAllCoroutines();
+            ResetAttempts();
+        }
+
+        private void ResetAttempts()
         {
             _attempts = 0;
             _isReconnecting = false;

@@ -56,7 +56,8 @@ namespace TheLostHill.UI.Lobby
 
             if (GameManager.Instance.Role == NetworkRole.Host && GameManager.Instance.HostManager != null)
             {
-                // Unsubscribe events if needed
+                GameManager.Instance.HostManager.OnClientConnected -= OnHostClientConnected;
+                GameManager.Instance.HostManager.OnClientDisconnected -= OnHostClientDisconnected;
             }
             else if (GameManager.Instance.Role == NetworkRole.Client && GameManager.Instance.ClientHandler != null)
             {
@@ -64,6 +65,10 @@ namespace TheLostHill.UI.Lobby
                 GameManager.Instance.ClientHandler.OnDisconnected -= OnLeaveClicked;
             }
         }
+
+        private void OnHostClientConnected(int id, string name) { if (this != null) RefreshList(); }
+        private void OnHostClientDisconnected(int id) { if (this != null) RefreshList(); }
+
 
         private void HandleClientNetworkMessage(NetworkMessage msg)
         {
@@ -76,10 +81,12 @@ namespace TheLostHill.UI.Lobby
 
         public void RefreshList()
         {
+            if (this == null || PlayersContainer == null) return;
+
             // Limpiar lista actual
             foreach (Transform child in PlayersContainer)
             {
-                Destroy(child.gameObject);
+                if (child != null) Destroy(child.gameObject);
             }
             _playerEntries.Clear();
 

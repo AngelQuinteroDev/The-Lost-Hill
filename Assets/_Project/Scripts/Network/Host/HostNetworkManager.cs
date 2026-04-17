@@ -1,9 +1,9 @@
 using System;
+using UnityEngine;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using System.Collections.Generic;
-using UnityEngine;
 using TheLostHill.Core;
 using TheLostHill.Network.Shared;
 
@@ -397,8 +397,8 @@ namespace TheLostHill.Network.Host
                 }
             }
 
-            // Cliente desconectado
-            HandleClientDisconnect(session.PlayerId);
+            // Cliente desconectado - Encolar para procesar en Main Thread
+            IncomingQueue.EnqueueInbound(new DisconnectMessage { SenderId = session.PlayerId });
         }
 
         // ═════════════════════════════════════════════════════════
@@ -466,6 +466,20 @@ namespace TheLostHill.Network.Host
                         HandleClientDisconnect(dc.SenderId);
                         break;
 
+                    case PlayerJoinedMessage joined:
+                        OnClientConnected?.Invoke(joined.PlayerId, joined.PlayerName);
+                        OnMessageReceived?.Invoke(joined);
+                        break;
+
+                    case PlayerStateMessage posMsg:
+                        if (Registry.TryGet(posMsg.SenderId, out ClientSession session))
+                        {
+                            // Actualizar posición y rotación en la sesión para el broadcast
+                            session.LastPosition = new Vector3(posMsg.PosX, posMsg.PosY, posMsg.PosZ);
+                            session.LastRotationY = posMsg.RotY;
+                        }
+                        break;
+
                     case KeepAliveMessage _:
                         // Solo actualiza LastHeartbeat (ya se hizo en el receive loop)
                         break;
@@ -476,6 +490,17 @@ namespace TheLostHill.Network.Host
                         break;
                 }
             }
+        }
+
+        private void HandlePingRequest(PingRequestMessage ping)
+        {
+            var response = new PingResponseMessage
+            {
+                SenderId = 0,
+                ClientTime = ping.ClientTime,
+                TargetPlayerId = ping.SenderId
+            };
+            SendTCP(ping.SenderId, response);
         }
 
         private void CheckClientTimeouts()
@@ -495,7 +520,7 @@ namespace TheLostHill.Network.Host
 
             foreach (int playerId in disconnected)
             {
-                HandleClientDisconnect(playerId);
+                IncomingQueue.EnqueueInbound(new DisconnectMessage { SenderId = playerId });
             }
         }
 

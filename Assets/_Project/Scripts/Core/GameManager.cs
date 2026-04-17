@@ -44,7 +44,23 @@ namespace TheLostHill.Core
             }
 
             Instance = this;
+            
+            // Requisito de Unity: DontDestroyOnLoad solo funciona en objetos "raíz"
+            transform.SetParent(null);
             DontDestroyOnLoad(gameObject);
+
+            // Asegurarnos de que si asignaste los managers en otros objetos por error o decisión,
+            // tampoco se destruyan al cambiar de escena.
+            if (HostManager != null && HostManager.gameObject != gameObject)
+            {
+                HostManager.transform.SetParent(null);
+                DontDestroyOnLoad(HostManager.gameObject);
+            }
+            if (ClientHandler != null && ClientHandler.gameObject != gameObject)
+            {
+                ClientHandler.transform.SetParent(null);
+                DontDestroyOnLoad(ClientHandler.gameObject);
+            }
 
             StateMachine = gameObject.AddComponent<GameStateMachine>();
         }
@@ -72,14 +88,22 @@ namespace TheLostHill.Core
             LocalPlayerName = playerName;
 
             if (ClientHandler == null) ClientHandler = gameObject.AddComponent<ClientNetworkHandler>();
-            ClientHandler.Connect(ip, port, playerName);
             
-            // Client Handler gestiona sus propios eventos, pero el StateMachine se actualizará
-            // cuando el Host envíe el mensaje de GameStateChange
+            // Suscribirse antes de conectar para no perder el evento si es muy rápido
+            ClientHandler.OnConnected += () => {
+                StateMachine.ChangeState(GameState.Lobby);
+            };
+
+            ClientHandler.Connect(ip, port, playerName);
         }
+
+        private bool _isLeaving = false;
 
         public void LeaveSession()
         {
+            if (_isLeaving) return;
+            _isLeaving = true;
+
             if (Role == NetworkRole.Host)
             {
                 HostManager?.StopHost();
@@ -92,11 +116,12 @@ namespace TheLostHill.Core
             Role = NetworkRole.None;
             StateMachine.ChangeState(GameState.MainMenu);
             
-            // TODO: Podría usar SceneLoader para cargar MainMenu
+            _isLeaving = false;
         }
 
         private void OnDestroy()
         {
+            Debug.Log($"[GameManager] OnDestroy en GameManager (ID: {GetInstanceID()}, Object: {gameObject.name}). Instance = {(Instance == this ? "This" : "Other")}");
             if (Instance == this)
             {
                 Instance = null;
