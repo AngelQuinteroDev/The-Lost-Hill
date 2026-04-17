@@ -1,0 +1,7 @@
+{
+  "MaxPlayers": 8,
+  "MonsterSpeed": 5.0,
+  "MonsterSpawnDelay": 30.0,
+  "TotalItemsToFind": 10,
+  "TimeLimitMinutes": 15.0
+}
