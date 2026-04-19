@@ -271,7 +271,7 @@ Transform:
   m_GameObject: {fileID: 352037815}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 1270.1, y: 290.97, z: 2.26915}
+  m_LocalPosition: {x: 1262.17, y: 290.97, z: 2.26915}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -306,8 +306,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c8bec8029220cb54bad64258741c8e9c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::TheLostHill.Gameplay.NetworkSpawner
-  _localPlayerPrefab: {fileID: 491945648447245420, guid: 4707e7b8398211344ae75e4abd252b40, type: 3}
-  _remotePlayerPrefab: {fileID: 491945648447245420, guid: 4707e7b8398211344ae75e4abd252b40, type: 3}
+  _localPlayerPrefab: {fileID: 119538588130614165, guid: 6b7dbd61c92c2a545b65b6666786cf01, type: 3}
+  _remotePlayerPrefab: {fileID: 119538588130614165, guid: 6b7dbd61c92c2a545b65b6666786cf01, type: 3}
   _spawnPoints:
   - {fileID: 1622340669}
   - {fileID: 829337815}
@@ -397,7 +397,7 @@ Transform:
   m_GameObject: {fileID: 550613420}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 1271.628, y: 290.97, z: 2.26915}
+  m_LocalPosition: {x: 1269.65, y: 290.97, z: 2.26915}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -428,7 +428,7 @@ Transform:
   m_GameObject: {fileID: 829337814}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 1272.366, y: 292.43, z: 2.26915}
+  m_LocalPosition: {x: 1276.39, y: 292.43, z: 2.26915}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -596,7 +596,7 @@ Transform:
   m_GameObject: {fileID: 1622340668}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 1273.8, y: 292.43, z: 2.26915}
+  m_LocalPosition: {x: 1281.18, y: 292.43, z: 2.26915}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []

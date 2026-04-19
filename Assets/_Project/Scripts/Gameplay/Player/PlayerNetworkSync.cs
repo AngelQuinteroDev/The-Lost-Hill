@@ -5,10 +5,13 @@ using TheLostHill.Network.Shared;
 
 namespace TheLostHill.Gameplay.Player
 {
-    [RequireComponent(typeof(PlayerController))]
+    [DisallowMultipleComponent]
     public class PlayerNetworkSync : MonoBehaviour
     {
-        private PlayerController _controller;
+        private PlayerControllerM _controllerM;
+        private Animator _animator;
+        private Transform _stateTransform;
+
         private float _lastSendTime;
         public int AssignedPlayerId { get; set; }
 
@@ -31,51 +34,49 @@ namespace TheLostHill.Gameplay.Player
 
         private void Awake()
         {
-            _controller = GetComponent<PlayerController>();
+            _controllerM = GetComponent<PlayerControllerM>();
+            if (_controllerM == null) _controllerM = GetComponentInChildren<PlayerControllerM>(true);
+
+            _animator = GetComponentInChildren<Animator>(true);
             _interpolation = GetComponent<InterpolationSystem>();
             _prediction = GetComponent<ClientSidePrediction>();
+
+            ResolveStateTransform();
         }
 
         public void Initialize(int playerId, bool isLocalPlayer)
         {
-            if (_controller == null) _controller = GetComponent<PlayerController>();
-
             AssignedPlayerId = playerId;
             _lastSendTime = float.NegativeInfinity;
             _isInitialized = true;
 
-            if (_controller != null)
-                _controller.Initialize(isLocalPlayer);
+            if (_controllerM != null) _controllerM.Initialize(isLocalPlayer);
+
+            ResolveStateTransform();
         }
 
-        public void ApplyColor(int colorIndex)
+        private void ResolveStateTransform()
         {
-            if (colorIndex < 0 || colorIndex >= PlayerColors.Length) colorIndex = 0;
-            
-            Color targetColor = PlayerColors[colorIndex];
-            Renderer[] renderers = GetComponentsInChildren<Renderer>();
-            
-            foreach (var renderer in renderers)
-            {
-                // Crear una copia única del material para este jugador
-                renderer.material.color = targetColor;
-            }
+            if (_controllerM != null) _stateTransform = _controllerM.transform;
+            else _stateTransform = transform;
+        }
+
+        private bool IsLocalOwned()
+        {
+            if (_controllerM != null && _controllerM.IsLocalPlayer) return true;
+
+            if (GameManager.Instance != null && AssignedPlayerId > 0)
+                return AssignedPlayerId == GameManager.Instance.LocalPlayerId;
+
+            return false;
         }
 
         private void LateUpdate()
         {
-            if (_controller == null) return;
-
-            // Fallback por orden de ciclo: si faltó Initialize, autoinicializar local.
-            if (!_isInitialized &&
-                _controller.IsLocalPlayer &&
-                GameManager.Instance != null &&
-                GameManager.Instance.LocalPlayerId > 0)
-            {
+            if (!_isInitialized && IsLocalOwned() && GameManager.Instance != null && GameManager.Instance.LocalPlayerId > 0)
                 Initialize(GameManager.Instance.LocalPlayerId, true);
-            }
 
-            if (!_isInitialized || !_controller.IsLocalPlayer) return;
+            if (!_isInitialized || !IsLocalOwned()) return;
             if (GameManager.Instance == null) return;
             if (GameManager.Instance.Role != NetworkRole.Client) return;
             if (GameManager.Instance.StateMachine == null) return;
@@ -97,18 +98,62 @@ namespace TheLostHill.Gameplay.Player
             int playerId = AssignedPlayerId > 0 ? AssignedPlayerId : GameManager.Instance.LocalPlayerId;
             if (playerId <= 0) return;
 
+            if (_stateTransform == null) ResolveStateTransform();
+
+            Vector3 pos = _stateTransform != null ? _stateTransform.position : transform.position;
+            float rotY = _stateTransform != null ? _stateTransform.eulerAngles.y : transform.eulerAngles.y;
+
+            ReadLocalAnimationState(out bool isMoving, out bool isRunning, out bool isPickingUp, out bool isAlive);
+
             var posMsg = new PlayerStateMessage
             {
                 SenderId = playerId,
                 PlayerId = playerId,
                 Timestamp = Time.unscaledTime,
-                PosX = transform.position.x,
-                PosY = transform.position.y,
-                PosZ = transform.position.z,
-                RotY = transform.rotation.eulerAngles.y
+                PosX = pos.x,
+                PosY = pos.y,
+                PosZ = pos.z,
+                RotY = rotY,
+                IsMoving = isMoving,
+                IsRunning = isRunning,
+                IsPickingUp = isPickingUp,
+                IsAlive = isAlive
             };
 
             GameManager.Instance.ClientHandler.Send(posMsg);
+        }
+
+        private void ReadLocalAnimationState(out bool isMoving, out bool isRunning, out bool isPickingUp, out bool isAlive)
+        {
+            isMoving = false;
+            isRunning = false;
+            isPickingUp = false;
+            isAlive = true;
+
+            if (_controllerM != null)
+            {
+                isMoving = _controllerM.NetIsMoving;
+                isRunning = _controllerM.NetIsRunning;
+                isPickingUp = _controllerM.NetIsPickingUp;
+                return;
+            }
+
+            if (_animator != null)
+            {
+                isRunning = TryGetAnimatorBool("isRunning");
+                bool isWalking = TryGetAnimatorBool("isWalking");
+                isPickingUp = TryGetAnimatorBool("isPickingUp");
+                isMoving = isRunning || isWalking;
+            }
+        }
+
+        private bool TryGetAnimatorBool(string param)
+        {
+            if (_animator == null) return false;
+            foreach (var p in _animator.parameters)
+                if (p.type == AnimatorControllerParameterType.Bool && p.name == param)
+                    return _animator.GetBool(param);
+            return false;
         }
 
         /// <summary>
@@ -116,7 +161,7 @@ namespace TheLostHill.Gameplay.Player
         /// </summary>
         public void ApplyServerState(Vector3 position, float rotationY)
         {
-            if (_controller != null && _controller.IsLocalPlayer) return;
+            if (IsLocalOwned()) return;
 
             if (_interpolation != null)
                 _interpolation.AddSnapshot(position, rotationY, Time.time);
@@ -124,6 +169,28 @@ namespace TheLostHill.Gameplay.Player
             {
                 transform.position = position;
                 transform.rotation = Quaternion.Euler(0, rotationY, 0);
+            }
+        }
+
+        /// <summary>Compatibilidad con NetworkSpawner al spawnear jugadores.</summary>
+        public void ApplyColor(int colorIndex)
+        {
+            var visuals = GetComponent<PlayerVisuals>();
+            if (visuals != null)
+            {
+                visuals.SetColorIndex(colorIndex);
+                return;
+            }
+
+            if (PlayerColors == null || PlayerColors.Length == 0) return;
+            if (colorIndex < 0 || colorIndex >= PlayerColors.Length) colorIndex = 0;
+
+            Color targetColor = PlayerColors[colorIndex];
+            var renderers = GetComponentsInChildren<Renderer>();
+            foreach (var r in renderers)
+            {
+                if (r != null && r.material != null)
+                    r.material.color = targetColor;
             }
         }
     }

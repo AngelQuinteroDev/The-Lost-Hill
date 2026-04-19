@@ -95,6 +95,12 @@ namespace TheLostHill.Network.Shared
         public float PosX, PosY, PosZ;
         public float RotY;
 
+        // Estado visual/animación
+        public bool IsMoving;
+        public bool IsRunning;
+        public bool IsPickingUp;
+        public bool IsAlive = true;
+
         public PlayerStateMessage() { Code = OpCode.PlayerState; }
     }
 
@@ -112,6 +118,11 @@ namespace TheLostHill.Network.Shared
         public float RotY;
         public int ColorIndex;
         public bool IsAlive;
+
+        // Estado visual/animación
+        public bool IsMoving;
+        public bool IsRunning;
+        public bool IsPickingUp;
     }
 
     /// <summary>

@@ -31,7 +31,15 @@ namespace TheLostHill.Network.Sync
         // ════════════════════════════════════════════════════════
         private void Update()
         {
-            if (!IsActive || _count < 2) return;
+            if (!IsActive || _count == 0) return;
+
+            // Fallback estable: con 1 snapshot aplicar directo
+            if (_count == 1)
+            {
+                transform.position = _buf[0].Position;
+                transform.rotation = _buf[0].Rotation;
+                return;
+            }
 
             float renderTime = Time.time - Constants.InterpolationDelay;
 
@@ -65,8 +73,17 @@ namespace TheLostHill.Network.Sync
         /// <summary>Agrega un snapshot recibido de la red.</summary>
         public void AddSnapshot(Vector3 pos, float rotY, float timestamp)
         {
-            // Descartar paquetes atrasados (UDP out-of-order)
-            if (_count > 0 && timestamp <= _buf[_count - 1].Time) return;
+            if (_count > 0)
+            {
+                float lastTime = _buf[_count - 1].Time;
+
+                // Paquete realmente atrasado -> descartar
+                if (timestamp + 0.0001f < lastTime) return;
+
+                // Mismo timestamp (mismo frame) -> forzar monotonicidad mínima
+                if (timestamp <= lastTime)
+                    timestamp = lastTime + 0.0001f;
+            }
 
             var snap = new Snapshot
             {

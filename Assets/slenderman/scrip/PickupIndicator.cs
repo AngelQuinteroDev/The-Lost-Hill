@@ -8,7 +8,7 @@ public class PickupIndicator : MonoBehaviour
     public Image iconImage;
     public float showRadius = 2.5f;
 
-    [Header("Animación")]
+    [Header("Animaciï¿½n")]
     public float pulseSpeed = 2f;
     public float pulseMinScale = 0.85f;
     public float pulseMaxScale = 1.15f;
@@ -34,14 +34,18 @@ public class PickupIndicator : MonoBehaviour
             return;
         }
 
-        PlayerController pc = player.GetComponent<PlayerController>();
-        if (pc == null || pc.mainCamera == null) return;
+        var pcm = player.GetComponent<PlayerControllerM>();
+        Camera camRef = pcm != null ? pcm.mainCamera : null;
+        float rayLength = pcm != null ? pcm.pickupRayLength : showRadius;
 
-        Transform cam = pc.mainCamera.transform;
+        if (camRef == null) camRef = Camera.main;
+        if (camRef == null) return;
+
+        Transform cam = camRef.transform;
         Ray ray = new Ray(cam.position, cam.forward);
         bool aimed = false;
 
-        if (Physics.Raycast(ray, out RaycastHit hit, pc.pickupRayLength))
+        if (Physics.Raycast(ray, out RaycastHit hit, rayLength))
             aimed = hit.collider.gameObject == gameObject;
 
         float dist = Vector3.Distance(transform.position, player.position);

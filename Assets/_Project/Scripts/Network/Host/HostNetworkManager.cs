@@ -170,6 +170,11 @@ namespace TheLostHill.Network.Host
                         posMsg.SenderId = session.PlayerId;
                         session.LastPosition = new Vector3(posMsg.PosX, posMsg.PosY, posMsg.PosZ);
                         session.LastRotationY = posMsg.RotY;
+                        session.LastIsMoving = posMsg.IsMoving;
+                        session.LastIsRunning = posMsg.IsRunning;
+                        session.LastIsPickingUp = posMsg.IsPickingUp;
+                        session.IsAlive = posMsg.IsAlive;
+                        session.HasReceivedState = true; // NUEVO
                     }
 
                     IncomingQueue.EnqueueInbound(msg);
@@ -290,6 +295,7 @@ namespace TheLostHill.Network.Host
                         break;
 
                     case PlayerStateMessage ps:
+                        // Host actualiza su vista y relaya al resto.
                         OnMessageReceived?.Invoke(ps);
                         Broadcast(ps, excludePlayerId: ps.SenderId);
                         break;

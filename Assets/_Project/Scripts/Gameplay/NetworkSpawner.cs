@@ -137,14 +137,80 @@ namespace TheLostHill.Gameplay
         // ════════════════════════════════════════════════════════
         private void FixedUpdate()
         {
-            // Volver al comportamiento estable: el host emite WorldState desde aquí.
             if (_gm == null || !_gm.IsHost || _host == null) return;
+
+            // Asegura que el host vea movimiento remoto aunque el evento llegue antes/desfasado.
+            SyncRemoteObjectsFromSessions();
 
             _broadcastTimer += Time.fixedDeltaTime;
             if (_broadcastTimer < BroadcastInterval) return;
             _broadcastTimer = 0f;
 
             _host.BroadcastWorldState(BuildWorldState());
+
+            // Refuerzo: enviar estado explícito del host (PlayerId 0)
+            BroadcastHostLocalState();
+        }
+
+        private void BroadcastHostLocalState()
+        {
+            if (_gm == null || !_gm.IsHost || _host == null) return;
+            if (!_playerObjects.TryGetValue(_gm.LocalPlayerId, out var hostGo) || hostGo == null) return;
+
+            // FIX: usar fuente correcta del host local (PlayerControllerM primero)
+            if (!TryReadHostLocalTransform(hostGo, out var pos, out var rotY))
+            {
+                pos = hostGo.transform.position;
+                rotY = hostGo.transform.eulerAngles.y;
+            }
+
+            ReadAnimationSnapshot(hostGo, out bool isMoving, out bool isRunning, out bool isPickingUp);
+
+            var msg = new PlayerStateMessage
+            {
+                SenderId = _gm.LocalPlayerId, // host = 0
+                PlayerId = _gm.LocalPlayerId,
+                Timestamp = Time.unscaledTime,
+                PosX = pos.x,
+                PosY = pos.y,
+                PosZ = pos.z,
+                RotY = rotY,
+                IsMoving = isMoving,
+                IsRunning = isRunning,
+                IsPickingUp = isPickingUp,
+                IsAlive = true
+            };
+
+            _host.Broadcast(msg);
+        }
+
+        private void SyncRemoteObjectsFromSessions()
+        {
+            if (_host == null || _gm == null || !_gm.IsHost) return;
+
+            foreach (var session in _host.Registry.GetAll())
+            {
+                if (session == null) continue;
+                if (session.PlayerId == _gm.LocalPlayerId) continue;
+                if (!session.HasReceivedState) continue;
+
+                if (!_playerObjects.TryGetValue(session.PlayerId, out var go) || go == null)
+                {
+                    SpawnPlayer(session.PlayerId, session.ColorIndex, isLocal: false);
+                    if (!_playerObjects.TryGetValue(session.PlayerId, out go) || go == null) continue;
+                }
+
+                go.transform.SetPositionAndRotation(
+                    session.LastPosition,
+                    Quaternion.Euler(0f, session.LastRotationY, 0f));
+
+                ApplyRemoteAnimationState(
+                    session.PlayerId,
+                    session.LastIsMoving,
+                    session.LastIsRunning,
+                    session.LastIsPickingUp,
+                    session.IsAlive);
+            }
         }
 
         private WorldStateMessage BuildWorldState()
@@ -153,24 +219,64 @@ namespace TheLostHill.Gameplay
             foreach (var kvp in _playerObjects)
             {
                 if (kvp.Value == null) continue;
-                var t = kvp.Value.transform;
+
+                Vector3 pos;
+                float rotY;
+                bool isMoving, isRunning, isPickingUp, isAlive;
+
+                bool isHostLocal = _gm != null && _gm.IsHost && kvp.Key == _gm.LocalPlayerId;
+
+                if (isHostLocal)
+                {
+                    // FIX: host local con fuente dedicada
+                    if (!TryReadHostLocalTransform(kvp.Value, out pos, out rotY))
+                    {
+                        var t = kvp.Value.transform;
+                        pos = t.position;
+                        rotY = t.eulerAngles.y;
+                    }
+
+                    ReadAnimationSnapshot(kvp.Value, out isMoving, out isRunning, out isPickingUp);
+                    isAlive = true;
+                }
+                else if (!TryGetAuthoritativeRemoteState(
+                    kvp.Key,
+                    out pos,
+                    out rotY,
+                    out isMoving,
+                    out isRunning,
+                    out isPickingUp,
+                    out isAlive))
+                {
+                    if (!TryReadControllerTransform(kvp.Value, out pos, out rotY))
+                    {
+                        var t = kvp.Value.transform;
+                        pos = t.position;
+                        rotY = t.eulerAngles.y;
+                    }
+
+                    ReadAnimationSnapshot(kvp.Value, out isMoving, out isRunning, out isPickingUp);
+                    isAlive = true;
+                }
+
                 snapshots.Add(new PlayerSnapshot
                 {
-                    PlayerId   = kvp.Key,
-                    PosX       = t.position.x,
-                    PosY       = t.position.y,
-                    PosZ       = t.position.z,
-                    RotY       = t.eulerAngles.y,
+                    PlayerId = kvp.Key,
+                    PosX = pos.x,
+                    PosY = pos.y,
+                    PosZ = pos.z,
+                    RotY = rotY,
                     ColorIndex = GetColorForPlayer(kvp.Key),
-                    IsAlive    = true
+                    IsAlive = isAlive,
+                    IsMoving = isMoving,
+                    IsRunning = isRunning,
+                    IsPickingUp = isPickingUp
                 });
             }
+
             return new WorldStateMessage { Players = snapshots.ToArray() };
         }
 
-        // ════════════════════════════════════════════════════════
-        //  HOST: MENSAJES ENTRANTES
-        // ════════════════════════════════════════════════════════
         private void OnHostMessageReceived(NetworkMessage msg)
         {
             if (msg is PlayerInputMessage input)
@@ -183,6 +289,7 @@ namespace TheLostHill.Gameplay
             {
                 int playerId = ps.SenderId > 0 ? ps.SenderId : ps.PlayerId;
                 ApplyRemotePlayerState(playerId, ps.PosX, ps.PosY, ps.PosZ, ps.RotY);
+                ApplyRemoteAnimationState(playerId, ps.IsMoving, ps.IsRunning, ps.IsPickingUp, ps.IsAlive);
             }
         }
 
@@ -275,6 +382,7 @@ namespace TheLostHill.Gameplay
                 {
                     int playerId = ps.PlayerId > 0 ? ps.PlayerId : ps.SenderId;
                     ApplyRemotePlayerState(playerId, ps.PosX, ps.PosY, ps.PosZ, ps.RotY);
+                    ApplyRemoteAnimationState(playerId, ps.IsMoving, ps.IsRunning, ps.IsPickingUp, ps.IsAlive);
                     break;
                 }
 
@@ -306,6 +414,7 @@ namespace TheLostHill.Gameplay
                 if (p.PlayerId == _gm.LocalPlayerId) continue;
                 ApplyRemotePlayerState(p.PlayerId, p.PosX, p.PosY, p.PosZ, p.RotY, true);
                 ApplyPlayerColor(p.PlayerId, p.ColorIndex);
+                ApplyRemoteAnimationState(p.PlayerId, p.IsMoving, p.IsRunning, p.IsPickingUp, p.IsAlive);
             }
         }
 
@@ -316,6 +425,7 @@ namespace TheLostHill.Gameplay
                 if (p.PlayerId == _gm.LocalPlayerId) continue;
                 ApplyRemotePlayerState(p.PlayerId, p.PosX, p.PosY, p.PosZ, p.RotY);
                 ApplyPlayerColor(p.PlayerId, p.ColorIndex);
+                ApplyRemoteAnimationState(p.PlayerId, p.IsMoving, p.IsRunning, p.IsPickingUp, p.IsAlive);
             }
         }
 
@@ -360,38 +470,213 @@ namespace TheLostHill.Gameplay
             foreach (var kvp in _playerObjects)
             {
                 if (kvp.Value == null) continue;
-                var t = kvp.Value.transform;
+
+                Vector3 pos;
+                float rotY;
+                bool isMoving, isRunning, isPickingUp, isAlive;
+
+                bool isHostLocal = _gm != null && _gm.IsHost && kvp.Key == _gm.LocalPlayerId;
+
+                if (isHostLocal)
+                {
+                    // FIX: host local con fuente dedicada
+                    if (!TryReadHostLocalTransform(kvp.Value, out pos, out rotY))
+                    {
+                        var t = kvp.Value.transform;
+                        pos = t.position;
+                        rotY = t.eulerAngles.y;
+                    }
+
+                    ReadAnimationSnapshot(kvp.Value, out isMoving, out isRunning, out isPickingUp);
+                    isAlive = true;
+                }
+                else if (!TryGetAuthoritativeRemoteState(
+                    kvp.Key,
+                    out pos,
+                    out rotY,
+                    out isMoving,
+                    out isRunning,
+                    out isPickingUp,
+                    out isAlive))
+                {
+                    if (!TryReadControllerTransform(kvp.Value, out pos, out rotY))
+                    {
+                        var t = kvp.Value.transform;
+                        pos = t.position;
+                        rotY = t.eulerAngles.y;
+                    }
+
+                    ReadAnimationSnapshot(kvp.Value, out isMoving, out isRunning, out isPickingUp);
+                    isAlive = true;
+                }
+
                 snapshots.Add(new PlayerSnapshot
                 {
-                    PlayerId   = kvp.Key,
-                    PosX       = t.position.x,
-                    PosY       = t.position.y,
-                    PosZ       = t.position.z,
-                    RotY       = t.eulerAngles.y,
+                    PlayerId = kvp.Key,
+                    PosX = pos.x,
+                    PosY = pos.y,
+                    PosZ = pos.z,
+                    RotY = rotY,
                     ColorIndex = GetColorForPlayer(kvp.Key),
-                    IsAlive    = true
+                    IsAlive = isAlive,
+                    IsMoving = isMoving,
+                    IsRunning = isRunning,
+                    IsPickingUp = isPickingUp
                 });
             }
+
             return new WorldSnapshotMessage
             {
-                Players          = snapshots.ToArray(),
+                Players = snapshots.ToArray(),
                 CurrentGameState = (byte)GameState.Playing
             };
         }
 
-        private int GetColorForPlayer(int playerId)
+        // Fuente dedicada para el host local
+        private bool TryReadHostLocalTransform(GameObject go, out Vector3 pos, out float rotY)
         {
-            if (playerId == _gm.LocalPlayerId) return _gm.LocalColorIndex;
-            if (_host != null && _host.Registry.TryGet(playerId, out var session))
-                return session.ColorIndex;
-            return 0;
+            pos = Vector3.zero;
+            rotY = 0f;
+            if (go == null) return false;
+
+            var cm = go.GetComponent<PlayerControllerM>() ?? go.GetComponentInChildren<PlayerControllerM>(true);
+            if (cm != null)
+            {
+                pos = cm.transform.position;
+                rotY = cm.transform.eulerAngles.y;
+                return true;
+            }
+
+            var cc = go.GetComponent<CharacterController>() ?? go.GetComponentInChildren<CharacterController>(true);
+            if (cc != null)
+            {
+                pos = cc.transform.position;
+                rotY = cc.transform.eulerAngles.y;
+                return true;
+            }
+
+            var rb = go.GetComponent<Rigidbody>() ?? go.GetComponentInChildren<Rigidbody>(true);
+            if (rb != null)
+            {
+                pos = rb.transform.position;
+                rotY = rb.transform.eulerAngles.y;
+                return true;
+            }
+
+            pos = go.transform.position;
+            rotY = go.transform.eulerAngles.y;
+            return true;
         }
 
-        private void ApplyInputToRemotePlayer(int playerId, float inputX, float inputZ, bool sprint)
+        private static bool TryReadControllerTransform(GameObject go, out Vector3 pos, out float rotY)
+        {
+            pos = Vector3.zero;
+            rotY = 0f;
+            if (go == null) return false;
+
+            // FIX: priorizar PlayerControllerM para POS y ROT
+            var cm = go.GetComponent<PlayerControllerM>() ?? go.GetComponentInChildren<PlayerControllerM>(true);
+            if (cm != null)
+            {
+                pos = cm.transform.position;
+                rotY = cm.transform.eulerAngles.y;
+                return true;
+            }
+
+            var cc = go.GetComponent<CharacterController>() ?? go.GetComponentInChildren<CharacterController>(true);
+            if (cc != null)
+            {
+                pos = cc.transform.position;
+                rotY = cc.transform.eulerAngles.y;
+                return true;
+            }
+
+            var rb = go.GetComponent<Rigidbody>() ?? go.GetComponentInChildren<Rigidbody>(true);
+            if (rb != null)
+            {
+                pos = rb.transform.position;
+                rotY = rb.transform.eulerAngles.y;
+                return true;
+            }
+
+            return false;
+        }
+
+        private void ReadAnimationSnapshot(GameObject go, out bool isMoving, out bool isRunning, out bool isPickingUp)
+        {
+            isMoving = false;
+            isRunning = false;
+            isPickingUp = false;
+            if (go == null) return;
+
+            // SOLO PlayerControllerM
+            var controllerM = go.GetComponent<PlayerControllerM>() ?? go.GetComponentInChildren<PlayerControllerM>(true);
+            if (controllerM != null)
+            {
+                isMoving = controllerM.NetIsMoving;
+                isRunning = controllerM.NetIsRunning;
+                isPickingUp = controllerM.NetIsPickingUp;
+                return;
+            }
+
+            var animator = go.GetComponentInChildren<Animator>(true);
+            if (animator != null)
+            {
+                isRunning = TryGetAnimatorBool(animator, "isRunning");
+                bool isWalking = TryGetAnimatorBool(animator, "isWalking");
+                isPickingUp = TryGetAnimatorBool(animator, "isPickingUp");
+                isMoving = isRunning || isWalking;
+            }
+        }
+
+        private static bool TryGetAnimatorBool(Animator animator, string param)
+        {
+            if (animator == null || string.IsNullOrEmpty(param)) return false;
+
+            foreach (var p in animator.parameters)
+            {
+                if (p.type == AnimatorControllerParameterType.Bool && p.name == param)
+                    return animator.GetBool(param);
+            }
+
+            return false;
+        }
+
+        private void ApplyRemoteAnimationState(int playerId, bool isMoving, bool isRunning, bool isPickingUp, bool isAlive)
         {
             if (!_playerObjects.TryGetValue(playerId, out var go) || go == null) return;
-            var ctrl = go.GetComponent<PlayerController>();
-            ctrl?.ApplyRemoteInput(inputX, inputZ, sprint);
+
+            var visuals = go.GetComponent<PlayerVisuals>() ?? go.GetComponentInChildren<PlayerVisuals>(true);
+            if (visuals != null)
+            {
+                visuals.SetAnimationState(isMoving, isRunning, isPickingUp, isAlive);
+                return;
+            }
+
+            // Fallback si no hay PlayerVisuals
+            var animator = go.GetComponentInChildren<Animator>(true);
+            if (animator == null) return;
+
+            bool walking = isMoving && !isRunning && !isPickingUp;
+            bool idle = !isMoving && !isPickingUp && isAlive;
+
+            SetAnimatorBoolIfExists(animator, "isRunning", isRunning && isAlive);
+            SetAnimatorBoolIfExists(animator, "isWalking", walking && isAlive);
+            SetAnimatorBoolIfExists(animator, "isPickingUp", isPickingUp && isAlive);
+            SetAnimatorBoolIfExists(animator, "isIdle", idle);
+        }
+
+        private static void SetAnimatorBoolIfExists(Animator animator, string param, bool value)
+        {
+            if (animator == null || string.IsNullOrEmpty(param)) return;
+            foreach (var p in animator.parameters)
+            {
+                if (p.type == AnimatorControllerParameterType.Bool && p.name == param)
+                {
+                    animator.SetBool(param, value);
+                    return;
+                }
+            }
         }
 
         // ── API pública ──────────────────────────────────────────
@@ -427,22 +712,43 @@ namespace TheLostHill.Gameplay
         {
             if (_playerObjects.ContainsKey(playerId)) return;
 
-            var prefab = isLocal ? _localPlayerPrefab : _remotePlayerPrefab;
-            if (prefab == null)
+            GameObject go = null;
+
+            // If spawning the local player, first check if one already exists in the scene
+            if (isLocal)
             {
-                Debug.LogError($"[NetworkSpawner] Prefab {(isLocal ? "_localPlayerPrefab" : "_remotePlayerPrefab")} es null. No se puede crear P{playerId}.");
-                return;
+                var existingPlayers = FindObjectsOfType<PlayerControllerM>();
+                foreach (var p in existingPlayers)
+                {
+                    if (p.IsLocalPlayer && !p.name.Contains("RemotePlayer"))
+                    {
+                        go = p.gameObject;
+                        Debug.Log($"[NetworkSpawner] Found pre-existing local player {go.name} for P{playerId}");
+                        break;
+                    }
+                }
             }
 
-            var spawnPos = GetSpawnPosition(playerId);
-            var go = Instantiate(prefab, spawnPos, Quaternion.identity);
-            go.name = isLocal ? $"LocalPlayer_{playerId}" : $"RemotePlayer_{playerId}";
+            if (go == null)
+            {
+                var prefab = isLocal ? _localPlayerPrefab : _remotePlayerPrefab;
+                if (prefab == null)
+                {
+                    Debug.LogError($"[NetworkSpawner] Prefab {(isLocal ? "_localPlayerPrefab" : "_remotePlayerPrefab")} es null. No se puede crear P{playerId}.");
+                    return;
+                }
 
-            var controller = go.GetComponent<PlayerController>();
-            if (controller != null)
-                controller.Initialize(isLocal);
+                var spawnPos = GetSpawnPosition(playerId);
+                go = Instantiate(prefab, spawnPos, Quaternion.identity);
+                go.name = isLocal ? $"LocalPlayer_{playerId}" : $"RemotePlayer_{playerId}";
+                Debug.Log($"[NetworkSpawner] Spawned P{playerId} (local={isLocal}, color={colorIndex}) @ {spawnPos}");
+            }
 
-            var netSync = go.GetComponent<PlayerNetworkSync>();
+            // SOLO PlayerControllerM
+            var controllerM = go.GetComponent<PlayerControllerM>() ?? go.GetComponentInChildren<PlayerControllerM>(true);
+            if (controllerM != null) controllerM.Initialize(isLocal);
+
+            var netSync = go.GetComponent<PlayerNetworkSync>() ?? go.GetComponentInChildren<PlayerNetworkSync>(true);
             if (netSync == null && isLocal && _gm != null && _gm.Role == NetworkRole.Client)
                 netSync = go.AddComponent<PlayerNetworkSync>();
 
@@ -453,8 +759,6 @@ namespace TheLostHill.Gameplay
 
             _playerObjects[playerId] = go;
             ApplyPlayerColor(playerId, colorIndex);
-
-            Debug.Log($"[NetworkSpawner] Spawned P{playerId} (local={isLocal}, color={colorIndex}) @ {spawnPos}");
         }
 
         private void ApplyPlayerColor(int playerId, int colorIndex)
@@ -462,13 +766,65 @@ namespace TheLostHill.Gameplay
             if (colorIndex < 0) colorIndex = 0;
             if (!_playerObjects.TryGetValue(playerId, out var go) || go == null) return;
 
-            var netSync = go.GetComponent<PlayerNetworkSync>();
-            if (netSync != null)
-                netSync.ApplyColor(colorIndex);
+            var netSync = go.GetComponent<PlayerNetworkSync>() ?? go.GetComponentInChildren<PlayerNetworkSync>(true);
+            if (netSync != null) netSync.ApplyColor(colorIndex);
 
-            var visuals = go.GetComponent<PlayerVisuals>();
-            if (visuals != null)
-                visuals.SetColorIndex(colorIndex);
+            var visuals = go.GetComponent<PlayerVisuals>() ?? go.GetComponentInChildren<PlayerVisuals>(true);
+            if (visuals != null) visuals.SetColorIndex(colorIndex);
+        }
+
+        private int GetColorForPlayer(int playerId)
+        {
+            if (_gm != null && playerId == _gm.LocalPlayerId)
+                return _gm.LocalColorIndex;
+
+            if (_host != null && _host.Registry.TryGet(playerId, out var session))
+                return session.ColorIndex;
+
+            return 0;
+        }
+
+        private void ApplyInputToRemotePlayer(int playerId, float inputX, float inputZ, bool sprint)
+        {
+            if (!_playerObjects.TryGetValue(playerId, out var go) || go == null) return;
+
+            // SOLO PlayerControllerM
+            var controllerM = go.GetComponent<PlayerControllerM>() ?? go.GetComponentInChildren<PlayerControllerM>(true);
+            if (controllerM != null)
+                controllerM.ApplyRemoteInput(inputX, inputZ, sprint);
+        }
+
+        private bool TryGetAuthoritativeRemoteState(
+            int playerId,
+            out Vector3 pos,
+            out float rotY,
+            out bool isMoving,
+            out bool isRunning,
+            out bool isPickingUp,
+            out bool isAlive)
+        {
+            pos = Vector3.zero;
+            rotY = 0f;
+            isMoving = false;
+            isRunning = false;
+            isPickingUp = false;
+            isAlive = true;
+
+            if (_gm == null || !_gm.IsHost || _host == null) return false;
+            if (playerId == _gm.LocalPlayerId) return false;
+
+            if (_host.Registry.TryGet(playerId, out var session) && session != null && session.HasReceivedState)
+            {
+                pos = session.LastPosition;
+                rotY = session.LastRotationY;
+                isMoving = session.LastIsMoving;
+                isRunning = session.LastIsRunning;
+                isPickingUp = session.LastIsPickingUp;
+                isAlive = session.IsAlive;
+                return true;
+            }
+
+            return false;
         }
     }
 }

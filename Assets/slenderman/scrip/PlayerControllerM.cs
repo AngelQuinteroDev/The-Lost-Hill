@@ -38,14 +38,24 @@ public class PlayerControllerM : MonoBehaviour
     private static readonly int AnimIdle = Animator.StringToHash("isIdle");
     private static readonly int AnimPickup = Animator.StringToHash("isPickingUp");
 
-    void Start()
+    private PlayerInput _playerInput;
+    private InputAction _interactAction;
+    private bool _isLocalPlayer = true;
+
+    public bool IsLocalPlayer => _isLocalPlayer;
+    public bool NetIsMoving { get; private set; }
+    public bool NetIsRunning { get; private set; }
+    public bool NetIsPickingUp { get; private set; }
+
+    private void Awake()
     {
         cc = GetComponent<CharacterController>();
         anim = GetComponent<Animator>();
+        _playerInput = GetComponent<PlayerInput>();
+    }
 
-        Cursor.lockState = CursorLockMode.Locked;
-        Cursor.visible = false;
-
+    void Start()
+    {
         if (playerCamera != null)
         {
             playerCamera.SetParent(transform);
@@ -56,10 +66,21 @@ public class PlayerControllerM : MonoBehaviour
         if (mainCamera == null && playerCamera != null)
             mainCamera = playerCamera.GetComponentInChildren<Camera>();
 
+        ApplyOwnershipState();
         SetupLayers();
 
-        PlayerInput pi = GetComponent<PlayerInput>();
-        pi.actions["Interact"].started += ctx => TryPickup();
+        if (_playerInput != null && _playerInput.actions != null)
+        {
+            _interactAction = _playerInput.actions["Interact"];
+            if (_interactAction != null)
+                _interactAction.started += OnInteract;
+        }
+    }
+
+    private void OnDestroy()
+    {
+        if (_interactAction != null)
+            _interactAction.started -= OnInteract;
     }
 
     void SetupLayers()
@@ -69,7 +90,7 @@ public class PlayerControllerM : MonoBehaviour
 
         if (localLayer == -1 || remoteLayer == -1) return;
 
-        bool local = IsLocalPlayer();
+        bool local = _isLocalPlayer;
 
         foreach (Renderer r in playerMeshRenderers)
             r.gameObject.layer = local ? localLayer : remoteLayer;
@@ -82,46 +103,30 @@ public class PlayerControllerM : MonoBehaviour
         }
     }
 
-    bool IsLocalPlayer() => true;
-
-    void OnMove(InputValue value) => moveInput = value.Get<Vector2>();
-    void OnLook(InputValue value) => lookInput = value.Get<Vector2>();
-    void OnSprint(InputValue value) { }
-
-    public void TryPickup()
+    private void ApplyOwnershipState()
     {
-        if (!isAlive || mainCamera == null) return;
+        if (_playerInput != null) _playerInput.enabled = _isLocalPlayer;
+        if (mainCamera != null) mainCamera.enabled = _isLocalPlayer;
 
-        Ray ray = mainCamera.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0f));
-        Debug.DrawRay(ray.origin, ray.direction * pickupRayLength, Color.green, 2f);
+        var listener = mainCamera != null ? mainCamera.GetComponent<AudioListener>() : null;
+        if (listener != null) listener.enabled = _isLocalPlayer;
 
-        if (!Physics.Raycast(ray, out RaycastHit hit, pickupRayLength)) return;
+        if (anim != null && !_isLocalPlayer)
+            anim.applyRootMotion = false;
 
-        Debug.Log("[Player] Golpeo: " + hit.collider.gameObject.name);
+        if (cc != null && !_isLocalPlayer)
+            cc.enabled = false;
 
-        CollectibleItem item = hit.collider.GetComponent<CollectibleItem>();
-        if (item == null) return;
-
-        item.Collect();
-        StartCoroutine(PickupAnimation());
-    }
-
-    IEnumerator PickupAnimation()
-    {
-        anim.SetBool(AnimRun, false);
-        anim.SetBool(AnimWalk, false);
-        anim.SetBool(AnimIdle, false);
-        anim.SetBool(AnimPickup, true);
-
-        yield return new WaitForSeconds(1f);
-
-        anim.SetBool(AnimPickup, false);
-        anim.SetBool(AnimIdle, true);
+        if (_isLocalPlayer)
+        {
+            Cursor.lockState = CursorLockMode.Locked;
+            Cursor.visible = false;
+        }
     }
 
     void Update()
     {
-        if (!isAlive) return;
+        if (!isAlive || !_isLocalPlayer) return;
         HandleCamera();
         HandleMovement();
     }
@@ -161,6 +166,9 @@ public class PlayerControllerM : MonoBehaviour
         if (running) anim.SetBool(AnimRun, true);
         else if (moving) anim.SetBool(AnimWalk, true);
         else anim.SetBool(AnimIdle, true);
+
+        NetIsMoving = moving;
+        NetIsRunning = running;
     }
 
     public void OnCaughtByEnemy()
@@ -190,6 +198,10 @@ public class PlayerControllerM : MonoBehaviour
         anim.SetBool(AnimWalk, false);
         anim.SetBool(AnimIdle, true);
         anim.SetBool(AnimPickup, false);
+
+        NetIsMoving = false;
+        NetIsRunning = false;
+        NetIsPickingUp = false;
     }
 
     void OnDrawGizmosSelected()
@@ -199,6 +211,84 @@ public class PlayerControllerM : MonoBehaviour
             Ray ray = mainCamera.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0f));
             Gizmos.color = Color.cyan;
             Gizmos.DrawRay(ray.origin, ray.direction * pickupRayLength);
+        }
+    }
+
+    public void Initialize(bool isLocalPlayer)
+    {
+        _isLocalPlayer = isLocalPlayer;
+        ApplyOwnershipState();
+        SetupLayers();
+    }
+
+    public void OnMove(InputValue value) => moveInput = value.Get<Vector2>();
+    public void OnLook(InputValue value) => lookInput = value.Get<Vector2>();
+    public void OnSprint(InputValue value) { }
+
+    private void OnInteract(InputAction.CallbackContext ctx) => TryPickup();
+
+    public void TryPickup()
+    {
+        if (!isAlive || !_isLocalPlayer || mainCamera == null) return;
+
+        Ray ray = mainCamera.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0f));
+        Debug.DrawRay(ray.origin, ray.direction * pickupRayLength, Color.green, 1.5f);
+
+        if (!Physics.Raycast(ray, out RaycastHit hit, pickupRayLength)) return;
+
+        CollectibleItem item = hit.collider.GetComponent<CollectibleItem>();
+        if (item == null) return;
+
+        item.Collect();
+        StartCoroutine(PickupAnimation());
+    }
+
+    private IEnumerator PickupAnimation()
+    {
+        NetIsPickingUp = true;
+
+        anim.SetBool(AnimRun, false);
+        anim.SetBool(AnimWalk, false);
+        anim.SetBool(AnimIdle, false);
+        anim.SetBool(AnimPickup, true);
+
+        yield return new WaitForSeconds(1f);
+
+        anim.SetBool(AnimPickup, false);
+        anim.SetBool(AnimIdle, true);
+
+        NetIsPickingUp = false;
+    }
+
+    public void ApplyRemoteInput(float inputX, float inputZ, bool sprint)
+    {
+        if (_isLocalPlayer) return;
+
+        Vector3 inputDir = new Vector3(inputX, 0f, inputZ);
+        NetIsMoving = inputDir.sqrMagnitude > 0.0001f;
+        NetIsRunning = sprint && NetIsMoving;
+        NetIsPickingUp = false;
+
+        if (NetIsMoving)
+        {
+            Quaternion targetRot = Quaternion.LookRotation(inputDir.normalized);
+            transform.rotation = Quaternion.Slerp(transform.rotation, targetRot, Time.deltaTime * 10f);
+        }
+
+        float speed = NetIsRunning ? runSpeed : walkSpeed;
+        Vector3 move = inputDir.normalized * speed;
+        
+        if (cc != null && cc.enabled)
+            cc.Move(move * Time.deltaTime);
+        else
+            transform.position += move * Time.deltaTime;
+
+        if (anim != null)
+        {
+            anim.SetBool(AnimRun, NetIsRunning);
+            anim.SetBool(AnimWalk, NetIsMoving && !NetIsRunning);
+            anim.SetBool(AnimIdle, !NetIsMoving);
+            anim.SetBool(AnimPickup, false);
         }
     }
 }

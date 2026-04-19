@@ -133,6 +133,10 @@ namespace TheLostHill.Network.Shared
                         writer.Write(m.PosY);
                         writer.Write(m.PosZ);
                         writer.Write(m.RotY);
+                        writer.Write(m.IsMoving);
+                        writer.Write(m.IsRunning);
+                        writer.Write(m.IsPickingUp);
+                        writer.Write(m.IsAlive);
                         break;
 
                     case WorldStateMessage m:
@@ -228,7 +232,15 @@ namespace TheLostHill.Network.Shared
                 writer.Write(snapshots[i].RotY);
                 writer.Write(snapshots[i].ColorIndex);
                 writer.Write(snapshots[i].IsAlive);
+                writer.Write(snapshots[i].IsMoving);
+                writer.Write(snapshots[i].IsRunning);
+                writer.Write(snapshots[i].IsPickingUp);
             }
+        }
+
+        private static bool TryReadBool(BinaryReader reader, bool defaultValue = false)
+        {
+            return reader.BaseStream.Position < reader.BaseStream.Length ? reader.ReadBoolean() : defaultValue;
         }
 
         private static void WriteMonsterSnapshot(BinaryWriter writer, MonsterSnapshot monster)
@@ -256,7 +268,10 @@ namespace TheLostHill.Network.Shared
                 snapshots[i].PosZ = reader.ReadSingle();
                 snapshots[i].RotY = reader.ReadSingle();
                 snapshots[i].ColorIndex = reader.ReadInt32();
-                snapshots[i].IsAlive = reader.ReadBoolean();
+                snapshots[i].IsAlive = TryReadBool(reader, true);
+                snapshots[i].IsMoving = TryReadBool(reader);
+                snapshots[i].IsRunning = TryReadBool(reader);
+                snapshots[i].IsPickingUp = TryReadBool(reader);
             }
             return snapshots;
         }
@@ -346,7 +361,11 @@ namespace TheLostHill.Network.Shared
                 PosX = r.ReadSingle(),
                 PosY = r.ReadSingle(),
                 PosZ = r.ReadSingle(),
-                RotY = r.ReadSingle()
+                RotY = r.ReadSingle(),
+                IsMoving = TryReadBool(r),
+                IsRunning = TryReadBool(r),
+                IsPickingUp = TryReadBool(r),
+                IsAlive = TryReadBool(r, true)
             };
         }
 

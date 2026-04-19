@@ -27,6 +27,14 @@ namespace TheLostHill.Network.Host
         public UnityEngine.Vector3 LastPosition { get; set; }
         public float LastRotationY { get; set; }
 
+        // Último estado de animación recibido
+        public bool LastIsMoving { get; set; }
+        public bool LastIsRunning { get; set; }
+        public bool LastIsPickingUp { get; set; }
+
+        // NUEVO: indica si ya llegó al menos un PlayerState válido
+        public bool HasReceivedState { get; set; }
+
         public ClientSession(int playerId, IPEndPoint endPoint)
         {
             PlayerId = playerId;
@@ -36,6 +44,7 @@ namespace TheLostHill.Network.Host
             IsConnected = true;
             LastHeartbeat = DateTime.UtcNow;
             Ping = 0f;
+            HasReceivedState = false;
         }
 
         public void Close()

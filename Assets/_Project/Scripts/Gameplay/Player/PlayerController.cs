@@ -36,6 +36,10 @@ namespace TheLostHill.Gameplay.Player
             }
         }
 
+        public bool NetIsMoving { get; private set; }
+        public bool NetIsRunning { get; private set; }
+        public bool NetIsPickingUp { get; private set; }
+
         private void Awake()
         {
             _cc = GetComponent<CharacterController>();
@@ -88,6 +92,10 @@ namespace TheLostHill.Gameplay.Player
 
             Vector3 inputDir = new Vector3(moveInput.x, 0, moveInput.y).normalized;
 
+            NetIsMoving = inputDir.sqrMagnitude > 0.0001f;
+            NetIsRunning = sprint && NetIsMoving;
+            NetIsPickingUp = false;
+
             // 2. Client Side Prediction lo procesa y aplica al CC localmente
             // Además guardará este input para enviarlo por red (PlayerNetworkSync se encarga)
             if (inputDir.magnitude > 0.01f)
@@ -105,6 +113,10 @@ namespace TheLostHill.Gameplay.Player
             if (IsLocalPlayer || _cc == null) return;
 
             Vector3 inputDir = new Vector3(inputX, 0f, inputZ);
+            NetIsMoving = inputDir.sqrMagnitude > 0.0001f;
+            NetIsRunning = sprint && NetIsMoving;
+            NetIsPickingUp = false;
+
             if (inputDir.sqrMagnitude > 0.0001f)
             {
                 Quaternion targetRot = Quaternion.LookRotation(inputDir.normalized);

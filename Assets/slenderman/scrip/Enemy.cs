@@ -131,8 +131,9 @@ public class Enemy : MonoBehaviour
 
         if (dist < catchRadius)
         {
-            PlayerController player = targetPlayer.GetComponent<PlayerController>();
+            var player = targetPlayer.GetComponent<PlayerControllerM>();
             if (player != null) player.OnCaughtByEnemy();
+
             targetPlayer = null;
             ReturnToPatrol();
         }

@@ -291,6 +291,8 @@ namespace TheLostHill.Network.Client
             if (!IsConnected || _udpClient == null) return;
 
             msg.SenderId = LocalPlayerId;
+            if (msg.Timestamp <= 0f) msg.Timestamp = Time.unscaledTime;
+
             byte[] data = PacketSerializer.SerializeUDP(msg);
 
             try

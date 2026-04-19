@@ -14,6 +14,13 @@ namespace TheLostHill.Gameplay.Player
         [Header("Colors Mapping")]
         public Color[] PlayerColors;     // Preset de 8 colores en el inspector
         
+        [Header("Animation Sync")]
+        public Animator CharacterAnimator;
+        public string WalkParam = "isWalking";
+        public string RunParam = "isRunning";
+        public string IdleParam = "isIdle";
+        public string PickupParam = "isPickingUp";
+
         private int _currentColorIndex = -1;
 
         public void SetColorIndex(int colorIndex)
@@ -32,6 +39,35 @@ namespace TheLostHill.Gameplay.Player
                         // En URP generalmente BaseColor es _BaseColor
                         r.material.SetColor("_BaseColor", designatedColor);
                     }
+                }
+            }
+        }
+
+        public void SetAnimationState(bool isMoving, bool isRunning, bool isPickingUp, bool isAlive = true)
+        {
+            if (CharacterAnimator == null)
+                CharacterAnimator = GetComponentInChildren<Animator>();
+            if (CharacterAnimator == null) return;
+
+            bool walking = isMoving && !isRunning && !isPickingUp;
+            bool idle = !isMoving && !isPickingUp && isAlive;
+
+            SetBoolIfExists(RunParam, isRunning && isAlive);
+            SetBoolIfExists(WalkParam, walking && isAlive);
+            SetBoolIfExists(PickupParam, isPickingUp && isAlive);
+            SetBoolIfExists(IdleParam, idle);
+        }
+
+        private void SetBoolIfExists(string param, bool value)
+        {
+            if (string.IsNullOrEmpty(param) || CharacterAnimator == null) return;
+
+            foreach (var p in CharacterAnimator.parameters)
+            {
+                if (p.type == AnimatorControllerParameterType.Bool && p.name == param)
+                {
+                    CharacterAnimator.SetBool(param, value);
+                    return;
                 }
             }
         }
