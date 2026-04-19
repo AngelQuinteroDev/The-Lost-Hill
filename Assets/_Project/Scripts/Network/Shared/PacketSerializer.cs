@@ -6,9 +6,8 @@ using TheLostHill.Core;
 namespace TheLostHill.Network.Shared
 {
     /// <summary>
-    /// Serialización binaria de mensajes de red.
-    /// Formato TCP: [4 bytes longitud][1 byte OpCode][N bytes payload]
-    /// Formato UDP: [1 byte OpCode][N bytes payload] (sin header de longitud)
+    /// Serialización binaria. En wire: [1 byte OpCode][senderId int32][timestamp float][payload…].
+    /// Todo el tráfico usa datagramas UDP (un datagrama = un mensaje).
     /// </summary>
     public static class PacketSerializer
     {
@@ -16,21 +15,8 @@ namespace TheLostHill.Network.Shared
         //  SERIALIZACIÓN
         // ═════════════════════════════════════════════════════════
 
-        /// <summary>
-        /// Serializa un mensaje para envío TCP (con length-prefix).
-        /// </summary>
-        public static byte[] SerializeTCP(NetworkMessage msg)
-        {
-            byte[] payload = SerializePayload(msg);
-
-            // [4 bytes longitud del payload][payload]
-            byte[] result = new byte[Constants.LengthHeaderSize + payload.Length];
-            byte[] lengthBytes = BitConverter.GetBytes(payload.Length);
-            Buffer.BlockCopy(lengthBytes, 0, result, 0, Constants.LengthHeaderSize);
-            Buffer.BlockCopy(payload, 0, result, Constants.LengthHeaderSize, payload.Length);
-
-            return result;
-        }
+        /// <summary>Alias de <see cref="SerializeUDP"/> por compatibilidad; el framing TCP ya no se usa.</summary>
+        public static byte[] SerializeTCP(NetworkMessage msg) => SerializeUDP(msg);
 
         /// <summary>
         /// Serializa un mensaje para envío UDP (sin length-prefix).
@@ -240,6 +226,7 @@ namespace TheLostHill.Network.Shared
                 writer.Write(snapshots[i].PosY);
                 writer.Write(snapshots[i].PosZ);
                 writer.Write(snapshots[i].RotY);
+                writer.Write(snapshots[i].ColorIndex);
                 writer.Write(snapshots[i].IsAlive);
             }
         }
@@ -268,6 +255,7 @@ namespace TheLostHill.Network.Shared
                 snapshots[i].PosY = reader.ReadSingle();
                 snapshots[i].PosZ = reader.ReadSingle();
                 snapshots[i].RotY = reader.ReadSingle();
+                snapshots[i].ColorIndex = reader.ReadInt32();
                 snapshots[i].IsAlive = reader.ReadBoolean();
             }
             return snapshots;

@@ -44,7 +44,10 @@ namespace TheLostHill.Core
             }
 
             Instance = this;
-            
+
+            // Mantener Update/Networking activos aunque la ventana no tenga foco (Multiplayer Center).
+            Application.runInBackground = true;
+
             // Requisito de Unity: DontDestroyOnLoad solo funciona en objetos "raíz"
             transform.SetParent(null);
             DontDestroyOnLoad(gameObject);
@@ -74,7 +77,7 @@ namespace TheLostHill.Core
 
             // Inicia servidor
             if (HostManager == null) HostManager = gameObject.AddComponent<HostNetworkManager>();
-            HostManager.StartHost(port, port + 1);
+            HostManager.StartHost(port);
 
             // Cambiar estado a Lobby
             StateMachine.ChangeState(GameState.Lobby);
@@ -88,8 +91,13 @@ namespace TheLostHill.Core
             LocalPlayerName = playerName;
 
             if (ClientHandler == null) ClientHandler = gameObject.AddComponent<ClientNetworkHandler>();
-            
-            // Suscribirse antes de conectar para no perder el evento si es muy rápido
+            // Mismo GameObject que ClientHandler (en escena puede estar en un hijo); si no, GetComponent<ClientNetworkHandler>() en PingMonitor es null y OnEnable falla.
+            GameObject clientGo = ClientHandler.gameObject;
+            if (clientGo.GetComponent<PingMonitor>() == null)
+                clientGo.AddComponent<PingMonitor>();
+
+            StateMachine.SubscribeClientMessages(ClientHandler);
+
             ClientHandler.OnConnected += () => {
                 StateMachine.ChangeState(GameState.Lobby);
             };
@@ -126,6 +134,15 @@ namespace TheLostHill.Core
             {
                 Instance = null;
             }
+        }
+
+        // ── Compatibilidad con Gameplay/NetworkSpawner ───────────
+        public bool IsHost => Role == NetworkRole.Host;
+        public int LocalColorIndex => Role == NetworkRole.Host ? 0 : (ClientHandler != null ? ClientHandler.ColorIndex : 0);
+
+        public void ChangeState(GameState newState)
+        {
+            StateMachine?.ChangeState(newState);
         }
     }
 }

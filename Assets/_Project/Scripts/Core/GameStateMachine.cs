@@ -2,6 +2,7 @@ using System;
 using UnityEngine;
 using TheLostHill.Network.Shared;
 using TheLostHill.Network.Host;
+using TheLostHill.Network.Client;
 
 namespace TheLostHill.Core
 {
@@ -25,31 +26,30 @@ namespace TheLostHill.Core
 
         public event Action<GameState, GameState> OnStateChanged;
 
-        private GameManager _gm;
-
-        private void Awake()
-        {
-            _gm = GameManager.Instance;
-        }
+        private ClientNetworkHandler _clientSubscribed;
 
         private void Update()
         {
-            // Intentar suscribirse si aún no lo estamos y el ClientHandler ya existe
-            if (_gm != null && _gm.ClientHandler != null && !_isSubscribedToClient)
-            {
-                _gm.ClientHandler.OnMessageReceived += HandleClientMessage;
-                _isSubscribedToClient = true;
-            }
+            var gm = GameManager.Instance;
+            if (gm != null && gm.ClientHandler != null && !_isSubscribedToClient)
+                SubscribeClientMessages(gm.ClientHandler);
         }
 
         private bool _isSubscribedToClient = false;
 
+        /// <summary>Registra el handler antes de conectar para no perder GameStateChange temprano.</summary>
+        public void SubscribeClientMessages(ClientNetworkHandler handler)
+        {
+            if (handler == null || _isSubscribedToClient) return;
+            handler.OnMessageReceived += HandleClientMessage;
+            _clientSubscribed = handler;
+            _isSubscribedToClient = true;
+        }
+
         private void OnDestroy()
         {
-            if (_gm != null && _gm.ClientHandler != null && _isSubscribedToClient)
-            {
-                _gm.ClientHandler.OnMessageReceived -= HandleClientMessage;
-            }
+            if (_clientSubscribed != null && _isSubscribedToClient)
+                _clientSubscribed.OnMessageReceived -= HandleClientMessage;
         }
 
         public void ChangeState(GameState newState)
@@ -61,21 +61,20 @@ namespace TheLostHill.Core
 
             Debug.Log($"[GameState] {oldState} -> {CurrentState}");
 
-            // Lógica de carga de escenas automática
-            HandleSceneTransition(newState);
-
-            OnStateChanged?.Invoke(oldState, CurrentState);
-
-            // Si somos Host, lo notificamos a todos
-            if (_gm != null && _gm.Role == NetworkRole.Host && _gm.HostManager != null)
+            var gm = GameManager.Instance;
+            if (gm != null && gm.Role == NetworkRole.Host && gm.HostManager != null)
             {
                 var msg = new GameStateChangeMessage
                 {
                     SenderId = 0,
                     NewState = (byte)CurrentState
                 };
-                _gm.HostManager.BroadcastTCP(msg);
+                gm.HostManager.Broadcast(msg);
             }
+
+            HandleSceneTransition(newState);
+
+            OnStateChanged?.Invoke(oldState, CurrentState);
         }
 
         private void HandleSceneTransition(GameState state)

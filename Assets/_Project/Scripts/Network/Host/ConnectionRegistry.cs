@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
+using TheLostHill.Network.Shared;
 
 namespace TheLostHill.Network.Host
 {
@@ -79,19 +80,19 @@ namespace TheLostHill.Network.Host
             return _sessions.TryGetValue(playerId, out session);
         }
 
-        /// <summary>Obtiene una sesión por dirección IP.</summary>
+        /// <summary>Obtiene una sesión por dirección IP (primer match).</summary>
         public ClientSession GetByIP(string ip)
         {
             return _sessions.Values.FirstOrDefault(s => s.IPAddress == ip);
         }
 
-        /// <summary>Obtiene una sesión por UDP EndPoint.</summary>
-        public ClientSession GetByUdpEndPoint(IPEndPoint endPoint)
+        /// <summary>Obtiene una sesión por endpoint UDP (IP normalizada + puerto del cliente).</summary>
+        public ClientSession GetByEndPoint(IPEndPoint endPoint)
         {
+            if (endPoint == null) return null;
             return _sessions.Values.FirstOrDefault(s =>
                 s.UdpEndPoint != null &&
-                s.UdpEndPoint.Address.Equals(endPoint.Address) &&
-                s.UdpEndPoint.Port == endPoint.Port);
+                UdpEndpointUtil.EndPointsMatch(s.UdpEndPoint, endPoint));
         }
 
         // ═════════════════════════════════════════════════════════

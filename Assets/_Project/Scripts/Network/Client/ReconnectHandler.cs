@@ -42,7 +42,7 @@ namespace TheLostHill.Network.Client
             _attempts++;
             
             // Reintentar conexión usando la última IP y puerto
-            handler.Connect(handler.ServerIP, handler.TcpPort, handler.PlayerName);
+            handler.Connect(handler.ServerIP, handler.ServerPort, handler.PlayerName);
 
             // Esperar un rato para ver si tuvo éxito o no (manejado de forma encolada en handler)
             yield return new WaitForSeconds(Constants.ConnectionTimeout);

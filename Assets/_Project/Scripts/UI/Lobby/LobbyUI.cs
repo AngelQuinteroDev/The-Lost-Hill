@@ -35,18 +35,17 @@ namespace TheLostHill.UI.Lobby
 
         private void OnEnable()
         {
-            // Suscribirse a eventos de red para actualizar la lista
             if (GameManager.Instance.Role == NetworkRole.Host)
             {
-                GameManager.Instance.HostManager.OnClientConnected += (id, name) => RefreshList();
-                GameManager.Instance.HostManager.OnClientDisconnected += (id) => RefreshList();
+                GameManager.Instance.HostManager.OnClientConnected += OnHostClientConnected;
+                GameManager.Instance.HostManager.OnClientDisconnected += OnHostClientDisconnected;
             }
             else if (GameManager.Instance.Role == NetworkRole.Client)
             {
                 GameManager.Instance.ClientHandler.OnMessageReceived += HandleClientNetworkMessage;
-                GameManager.Instance.ClientHandler.OnDisconnected += OnLeaveClicked;
+                GameManager.Instance.ClientHandler.OnDisconnected += OnClientDisconnectedFromHost;
             }
-            
+
             RefreshList();
         }
 
@@ -62,12 +61,24 @@ namespace TheLostHill.UI.Lobby
             else if (GameManager.Instance.Role == NetworkRole.Client && GameManager.Instance.ClientHandler != null)
             {
                 GameManager.Instance.ClientHandler.OnMessageReceived -= HandleClientNetworkMessage;
-                GameManager.Instance.ClientHandler.OnDisconnected -= OnLeaveClicked;
+                GameManager.Instance.ClientHandler.OnDisconnected -= OnClientDisconnectedFromHost;
             }
         }
 
-        private void OnHostClientConnected(int id, string name) { if (this != null) RefreshList(); }
-        private void OnHostClientDisconnected(int id) { if (this != null) RefreshList(); }
+        private void OnHostClientConnected(int id, string name)
+        {
+            if (this != null) RefreshList();
+        }
+
+        private void OnHostClientDisconnected(int id)
+        {
+            if (this != null) RefreshList();
+        }
+
+        private void OnClientDisconnectedFromHost()
+        {
+            if (this != null) OnLeaveClicked();
+        }
 
 
         private void HandleClientNetworkMessage(NetworkMessage msg)
@@ -106,11 +117,34 @@ namespace TheLostHill.UI.Lobby
             }
             else if (GameManager.Instance.Role == NetworkRole.Client)
             {
-                // En el MVP, el cliente obtiene la lista de jugadores a través de mensajes de red.
-                // Por ahora, solo mostramos al host y a nosotros mismos si tenemos el ID.
-                if (GameManager.Instance.ClientHandler.IsConnected)
+                if (!GameManager.Instance.ClientHandler.IsConnected) return;
+
+                int localId = GameManager.Instance.LocalPlayerId;
+                var orderedIds = new SortedSet<int> { 0, localId };
+                foreach (int id in GameManager.Instance.ClientHandler.LobbyPeers.Keys)
+                    orderedIds.Add(id);
+
+                foreach (int id in orderedIds)
                 {
-                    AddPlayerEntry(GameManager.Instance.LocalPlayerId, GameManager.Instance.LocalPlayerName, "Local");
+                    string name;
+                    string status;
+                    if (id == 0)
+                    {
+                        name = "Host";
+                        status = "Host";
+                    }
+                    else if (id == localId)
+                    {
+                        name = GameManager.Instance.LocalPlayerName;
+                        status = "Tú";
+                    }
+                    else
+                    {
+                        name = GameManager.Instance.ClientHandler.LobbyPeers[id];
+                        status = "Conectado";
+                    }
+
+                    AddPlayerEntry(id, name, status);
                 }
             }
         }

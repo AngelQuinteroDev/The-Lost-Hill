@@ -5,9 +5,10 @@ namespace TheLostHill.Core
     /// </summary>
     public static class Constants
     {
-        // ── Puertos ──────────────────────────────────────────────
-        public const int DefaultTcpPort = 7777;
-        public const int DefaultUdpPort = 7778;
+        // ── Red (un solo puerto UDP) ─────────────────────────────
+        public const int DefaultNetworkPort = 7777;
+        public const int DefaultTcpPort = DefaultNetworkPort;
+        public const int DefaultUdpPort = DefaultNetworkPort;
 
         // ── Buffers ──────────────────────────────────────────────
         public const int TcpBufferSize = 4096;
@@ -17,7 +18,8 @@ namespace TheLostHill.Core
         // ── Timeouts (segundos) ──────────────────────────────────
         public const float ConnectionTimeout = 15f;
         public const float TcpKeepAliveInterval = 10f;
-        public const float DisconnectTimeout = 30f;
+        // Más margen para pruebas con ventanas en background (Multiplayer Center)
+        public const float DisconnectTimeout = 90f;
 
         // ── Ping ─────────────────────────────────────────────────
         public const float PingInterval = 1f;
@@ -44,5 +46,8 @@ namespace TheLostHill.Core
         // ── Header ───────────────────────────────────────────────
         /// <summary>Tamaño del header de longitud para TCP framing (4 bytes = int32).</summary>
         public const int LengthHeaderSize = 4;
+
+        // ── Escenas ──────────────────────────────────────────────
+        public const string MainMenuScene = "MainScene";
     }
 }

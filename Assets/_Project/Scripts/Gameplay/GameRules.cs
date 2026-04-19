@@ -11,7 +11,7 @@ namespace TheLostHill.Gameplay
     public class GameRules
     {
         // Límites
-        public int MaxPlayers = 8;
+        public int MaxPlayers = 4;
         
         // Dificultad general
         public float MonsterSpeed = 5.0f;

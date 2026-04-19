@@ -14,6 +14,7 @@ namespace TheLostHill.Gameplay.Player
 
         private InterpolationSystem _interpolation;
         private ClientSidePrediction _prediction;
+        private bool _isInitialized;
 
         [Header("Visuals")]
         public Color[] PlayerColors = new Color[]
@@ -35,6 +36,18 @@ namespace TheLostHill.Gameplay.Player
             _prediction = GetComponent<ClientSidePrediction>();
         }
 
+        public void Initialize(int playerId, bool isLocalPlayer)
+        {
+            if (_controller == null) _controller = GetComponent<PlayerController>();
+
+            AssignedPlayerId = playerId;
+            _lastSendTime = float.NegativeInfinity;
+            _isInitialized = true;
+
+            if (_controller != null)
+                _controller.Initialize(isLocalPlayer);
+        }
+
         public void ApplyColor(int colorIndex)
         {
             if (colorIndex < 0 || colorIndex >= PlayerColors.Length) colorIndex = 0;
@@ -49,44 +62,53 @@ namespace TheLostHill.Gameplay.Player
             }
         }
 
-        private void Update()
+        private void LateUpdate()
         {
-            if (_controller.IsLocalPlayer)
+            if (_controller == null) return;
+
+            // Fallback por orden de ciclo: si faltó Initialize, autoinicializar local.
+            if (!_isInitialized &&
+                _controller.IsLocalPlayer &&
+                GameManager.Instance != null &&
+                GameManager.Instance.LocalPlayerId > 0)
             {
-                // Solo enviamos si estamos en red
-                if (GameManager.Instance.Role != NetworkRole.None)
-                {
-                    SyncLocalState();
-                }
+                Initialize(GameManager.Instance.LocalPlayerId, true);
             }
+
+            if (!_isInitialized || !_controller.IsLocalPlayer) return;
+            if (GameManager.Instance == null) return;
+            if (GameManager.Instance.Role != NetworkRole.Client) return;
+            if (GameManager.Instance.StateMachine == null) return;
+            if (GameManager.Instance.StateMachine.CurrentState != GameState.Playing) return;
+            if (GameManager.Instance.ClientHandler == null || !GameManager.Instance.ClientHandler.IsConnected) return;
+
+            int gmLocalId = GameManager.Instance.LocalPlayerId;
+            if (gmLocalId > 0 && AssignedPlayerId != gmLocalId)
+                AssignedPlayerId = gmLocalId;
+
+            SyncLocalState();
         }
 
         private void SyncLocalState()
         {
-            if (Time.time - _lastSendTime >= Constants.NetworkSendRate)
-            {
-                _lastSendTime = Time.time;
-                
-                // Enviar nuestra posición actual al Host por UDP
-                var posMsg = new PlayerStateMessage
-                {
-                    SenderId = AssignedPlayerId,
-                    PosX = transform.position.x,
-                    PosY = transform.position.y,
-                    PosZ = transform.position.z,
-                    RotY = transform.rotation.eulerAngles.y
-                };
+            if (Time.unscaledTime - _lastSendTime < Constants.NetworkSendRate) return;
+            _lastSendTime = Time.unscaledTime;
 
-                if (GameManager.Instance.Role == NetworkRole.Host)
-                {
-                    // Si somos el host, simplemente actualizamos el registro localmente (o nos lo enviamos a nosotros mismos)
-                    // En este MVP, el HostManager ya tiene acceso a nuestra posición física vía Registry.
-                }
-                else
-                {
-                    GameManager.Instance.ClientHandler.SendTCP(posMsg);
-                }
-            }
+            int playerId = AssignedPlayerId > 0 ? AssignedPlayerId : GameManager.Instance.LocalPlayerId;
+            if (playerId <= 0) return;
+
+            var posMsg = new PlayerStateMessage
+            {
+                SenderId = playerId,
+                PlayerId = playerId,
+                Timestamp = Time.unscaledTime,
+                PosX = transform.position.x,
+                PosY = transform.position.y,
+                PosZ = transform.position.z,
+                RotY = transform.rotation.eulerAngles.y
+            };
+
+            GameManager.Instance.ClientHandler.Send(posMsg);
         }
 
         /// <summary>
@@ -94,18 +116,14 @@ namespace TheLostHill.Gameplay.Player
         /// </summary>
         public void ApplyServerState(Vector3 position, float rotationY)
         {
-            if (_controller.IsLocalPlayer)
-            {
-                // Opcional: Reconciliación si la discrepancia es mucha
-                // transform.position = position; 
-            }
+            if (_controller != null && _controller.IsLocalPlayer) return;
+
+            if (_interpolation != null)
+                _interpolation.AddSnapshot(position, rotationY, Time.time);
             else
             {
-                // Entidad remota: Alimerntar el sistema de interpolación
-                if (_interpolation != null)
-                {
-                    _interpolation.AddSnapshot(position, rotationY, Time.time);
-                }
+                transform.position = position;
+                transform.rotation = Quaternion.Euler(0, rotationY, 0);
             }
         }
     }

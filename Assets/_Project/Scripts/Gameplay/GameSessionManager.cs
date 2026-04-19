@@ -33,7 +33,9 @@ namespace TheLostHill.Gameplay
             if (GameManager.Instance.Role != NetworkRole.Host) return;
             if (GameManager.Instance.StateMachine.CurrentState != GameState.Playing) return;
 
-            // Loop de Red del Servidor (Host)
+            // NetworkSpawner ya es la fuente de WorldState para evitar desdobles.
+            if (NetworkSpawner.Instance != null) return;
+
             if (Time.time - _lastTickTime >= _tickRate)
             {
                 _lastTickTime = Time.time;
@@ -43,8 +45,9 @@ namespace TheLostHill.Gameplay
 
         private void BroadcastWorldUpdate()
         {
-            if (NetworkSpawner.Instance == null) return;
+            if (NetworkSpawner.Instance == null || GameManager.Instance == null) return;
 
+            var gm = GameManager.Instance;
             var playerDict = NetworkSpawner.Instance.ActivePlayers;
             PlayerSnapshot[] snapshots = new PlayerSnapshot[playerDict.Count];
             int i = 0;
@@ -53,33 +56,37 @@ namespace TheLostHill.Gameplay
             {
                 var player = kvp.Value;
                 int colorIdx = 0;
-                
-                // Intentar obtener el color asignado desde el Registry del Host
-                if (GameManager.Instance.HostManager.Registry.TryGet(kvp.Key, out var session))
+                Vector3 pos = player.transform.position;
+                float rotY = player.transform.rotation.eulerAngles.y;
+
+                if (gm.HostManager != null && gm.HostManager.Registry.TryGet(kvp.Key, out var session))
                 {
                     colorIdx = session.ColorIndex;
+
+                    // Para clientes remotos, usar la última posición confirmada por red
+                    if (kvp.Key != gm.LocalPlayerId)
+                    {
+                        pos = session.LastPosition;
+                        rotY = session.LastRotationY;
+                    }
                 }
 
                 snapshots[i++] = new PlayerSnapshot
                 {
                     PlayerId = kvp.Key,
-                    PosX = player.transform.position.x,
-                    PosY = player.transform.position.y,
-                    PosZ = player.transform.position.z,
-                    RotY = player.transform.rotation.eulerAngles.y,
+                    PosX = pos.x,
+                    PosY = pos.y,
+                    PosZ = pos.z,
+                    RotY = rotY,
                     ColorIndex = colorIdx,
                     IsAlive = true
                 };
             }
 
-            // 1. Recopilar datos de todos los jugadores
-            WorldStateMessage worldState = new WorldStateMessage
+            gm.HostManager.BroadcastWorldState(new WorldStateMessage
             {
                 Players = snapshots
-            };
-
-            // 2. Enviar por UDP (Baja latencia)
-            GameManager.Instance.HostManager.BroadcastWorldState(worldState);
+            });
         }
     }
 }

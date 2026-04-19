@@ -19,7 +19,7 @@ namespace TheLostHill.Admin
             IsPaused = true;
             Time.timeScale = 0; // Efecto Local
             
-            GameManager.Instance.HostManager?.BroadcastTCP(new PauseGameMessage());
+            GameManager.Instance.HostManager?.Broadcast(new PauseGameMessage());
             Debug.Log("[Admin] Juego Pausado.");
         }
 
@@ -28,7 +28,7 @@ namespace TheLostHill.Admin
             IsPaused = false;
             Time.timeScale = 1; // Efecto Local
             
-            GameManager.Instance.HostManager?.BroadcastTCP(new ResumeGameMessage());
+            GameManager.Instance.HostManager?.Broadcast(new ResumeGameMessage());
             Debug.Log("[Admin] Juego Reanudado.");
         }
     }

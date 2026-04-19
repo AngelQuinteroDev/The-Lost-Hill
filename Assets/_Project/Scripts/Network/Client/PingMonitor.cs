@@ -1,4 +1,5 @@
 using UnityEngine;
+using TheLostHill.Core;
 using TheLostHill.Network.Shared;
 
 namespace TheLostHill.Network.Client
@@ -20,12 +21,25 @@ namespace TheLostHill.Network.Client
 
         private void Awake()
         {
-            _client = GetComponent<ClientNetworkHandler>();
+            ResolveClient();
             _pingHistory = new float[Core.Constants.PingSmoothingWindow];
+        }
+
+        /// <summary>ClientNetworkHandler suele estar en el mismo GO; si está en el padre (GameManager) o solo en Instance, lo resolvemos aquí.</summary>
+        private void ResolveClient()
+        {
+            if (_client != null) return;
+            _client = GetComponent<ClientNetworkHandler>();
+            if (_client == null)
+                _client = GetComponentInParent<ClientNetworkHandler>();
+            if (_client == null && GameManager.Instance != null)
+                _client = GameManager.Instance.ClientHandler;
         }
 
         private void OnEnable()
         {
+            ResolveClient();
+            if (_client == null) return;
             _client.OnMessageReceived += HandleMessage;
         }
 
@@ -37,17 +51,15 @@ namespace TheLostHill.Network.Client
 
         private void Update()
         {
-            if (!_client.IsConnected) return;
+            if (_client == null || !_client.IsConnected) return;
 
-            if (Time.time - _lastPingTime >= Core.Constants.PingInterval)
+            if (Time.unscaledTime - _lastPingTime >= Core.Constants.PingInterval)
             {
-                _lastPingTime = Time.time;
-                var pingMsg = new PingRequestMessage { ClientTime = Time.time };
+                _lastPingTime = Time.unscaledTime;
+                var pingMsg = new PingRequestMessage { ClientTime = Time.unscaledTime };
                 
-                // Usamos TCP para un RTT más preciso en el canal crítico,
-                // aunque UDP es válido si queremos medir latencia de gameplay puro.
-                // En Unity multijugador comúnmente se usan ambos, aquí TCP es más controlable.
-                _client.SendTCP(pingMsg); 
+                // Ping por el mismo canal UDP que el resto del juego.
+                _client.Send(pingMsg);
             }
         }
 
@@ -55,7 +67,7 @@ namespace TheLostHill.Network.Client
         {
             if (msg is PingResponseMessage pingResp)
             {
-                float rtt = Time.time - pingResp.ClientTime;
+                float rtt = Time.unscaledTime - pingResp.ClientTime;
                 
                 _pingHistory[_pingIndex] = rtt;
                 _pingIndex = (_pingIndex + 1) % _pingHistory.Length;

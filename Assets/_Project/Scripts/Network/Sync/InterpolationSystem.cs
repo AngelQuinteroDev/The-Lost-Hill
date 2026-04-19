@@ -1,102 +1,99 @@
 using UnityEngine;
 using TheLostHill.Core;
-using TheLostHill.Network.Shared;
-using System.Collections.Generic;
 
 namespace TheLostHill.Network.Sync
 {
     /// <summary>
-    /// Sistema de interpolación para entidades remotas (jugadores, monstruo).
-    /// Mantiene un buffer circular de snapshots pasados.
-    /// Renderiza la entidad con un pequeño retraso (~100ms) para interpolar
-    /// suavemente entre estados, ocultando los saltos por packet loss y actualización discreta.
+    /// Interpola la posición de entidades remotas (jugadores, monstruo).
+    /// Mantiene un buffer de snapshots y renderiza con 'InterpolationDelay' de retraso.
+    /// 
+    /// FIX vs versión original:
+    ///   · El buffer ahora es una lista ordenada simple (no circular con headIndex),
+    ///     eliminando el bug donde los índices from/to se calculaban en orden inverso.
+    ///   · AddSnapshot descarta paquetes out-of-order por timestamp.
+    ///   · Clear() limpia correctamente antes de recibir WorldSnapshot inicial.
     /// </summary>
     public class InterpolationSystem : MonoBehaviour
     {
-        private struct StateSnapshot
+        private struct Snapshot
         {
-            public float Timestamp;
-            public Vector3 Position;
+            public float      Time;
+            public Vector3    Position;
             public Quaternion Rotation;
         }
 
-        private readonly StateSnapshot[] _buffer = new StateSnapshot[Constants.SnapshotBufferSize];
-        private int _bufferCount = 0;
-        private int _headIndex = 0;
+        // Buffer ordenado por tiempo. Tamaño máximo = SnapshotBufferSize.
+        private readonly Snapshot[] _buf = new Snapshot[Constants.SnapshotBufferSize];
+        private int _count = 0;
 
         public bool IsActive = true;
 
+        // ════════════════════════════════════════════════════════
         private void Update()
         {
-            if (!IsActive || _bufferCount < 2) return;
+            if (!IsActive || _count < 2) return;
 
-            // Buscamos renderizar el estado como era hace 'InterpolationDelay' segundos 
             float renderTime = Time.time - Constants.InterpolationDelay;
 
-            // Encontrar indices de los snapshots que rodean al renderTime
-            int idxFrom = -1;
-            int idxTo = -1;
-
-            // Empezamos desde el más reciente (headIndex - 1)
-            for (int i = 0; i < _bufferCount; i++)
+            // Buscar dos snapshots contiguos que rodeen a renderTime
+            // _buf[0] es el más antiguo, _buf[_count-1] el más nuevo
+            for (int i = 0; i < _count - 1; i++)
             {
-                int currIdx = (_headIndex - 1 - i + Constants.SnapshotBufferSize) % Constants.SnapshotBufferSize;
-                int prevIdx = (currIdx - 1 + Constants.SnapshotBufferSize) % Constants.SnapshotBufferSize;
-                
-                // Si llegamos al final de los datos válidos
-                if (i == _bufferCount - 1) break;
-
-                // El time es mayor porque a medida que 'i' avanza vamos más atrás en el tiempo
-                if (_buffer[currIdx].Timestamp >= renderTime && _buffer[prevIdx].Timestamp <= renderTime)
+                if (_buf[i].Time <= renderTime && _buf[i + 1].Time >= renderTime)
                 {
-                    idxTo = currIdx;
-                    idxFrom = prevIdx;
-                    break;
+                    float span = _buf[i + 1].Time - _buf[i].Time;
+                    float t    = (span > 0.0001f) ? (renderTime - _buf[i].Time) / span : 1f;
+
+                    transform.position = Vector3.Lerp(_buf[i].Position, _buf[i + 1].Position, t);
+                    transform.rotation = Quaternion.Slerp(_buf[i].Rotation, _buf[i + 1].Rotation, t);
+                    return;
                 }
             }
 
-            if (idxFrom != -1 && idxTo != -1 && _buffer[idxTo].Timestamp > _buffer[idxFrom].Timestamp)
+            // Si renderTime es más reciente que todos los snapshots, quedarse en el último
+            if (renderTime > _buf[_count - 1].Time)
             {
-                StateSnapshot sFrom = _buffer[idxFrom];
-                StateSnapshot sTo = _buffer[idxTo];
-
-                float t = (renderTime - sFrom.Timestamp) / (sTo.Timestamp - sFrom.Timestamp);
-                
-                // Aplicar interpolación
-                transform.position = Vector3.Lerp(sFrom.Position, sTo.Position, t);
-                transform.rotation = Quaternion.Slerp(sFrom.Rotation, sTo.Rotation, t);
+                transform.position = _buf[_count - 1].Position;
+                transform.rotation = _buf[_count - 1].Rotation;
             }
         }
 
-        /// <summary>
-        /// Agrega un nuevo snapshot proveniente de la red.
-        /// </summary>
+        // ════════════════════════════════════════════════════════
+        //  API PÚBLICA
+        // ════════════════════════════════════════════════════════
+
+        /// <summary>Agrega un snapshot recibido de la red.</summary>
         public void AddSnapshot(Vector3 pos, float rotY, float timestamp)
         {
-            Quaternion rot = Quaternion.Euler(0, rotY, 0);
+            // Descartar paquetes atrasados (UDP out-of-order)
+            if (_count > 0 && timestamp <= _buf[_count - 1].Time) return;
 
-            // Evitar snapshots atrasados (out of order UDP)
-            if (_bufferCount > 0)
+            var snap = new Snapshot
             {
-                int newestIdx = (_headIndex - 1 + Constants.SnapshotBufferSize) % Constants.SnapshotBufferSize;
-                if (timestamp <= _buffer[newestIdx].Timestamp) return;
-            }
-
-            _buffer[_headIndex] = new StateSnapshot
-            {
-                Timestamp = timestamp, // Usamos un timestamp validado y correlacionado (Time.time local)
+                Time     = timestamp,
                 Position = pos,
-                Rotation = rot
+                Rotation = Quaternion.Euler(0, rotY, 0)
             };
 
-            _headIndex = (_headIndex + 1) % Constants.SnapshotBufferSize;
-            if (_bufferCount < Constants.SnapshotBufferSize) _bufferCount++;
+            if (_count < Constants.SnapshotBufferSize)
+            {
+                _buf[_count++] = snap;
+            }
+            else
+            {
+                // Descartar el más antiguo (shift hacia la izquierda)
+                System.Array.Copy(_buf, 1, _buf, 0, _count - 1);
+                _buf[_count - 1] = snap;
+            }
         }
 
+        /// <summary>Sobrecarga que acepta Vector3 directamente.</summary>
+        public void AddSnapshot(Vector3 pos, float rotY) => AddSnapshot(pos, rotY, Time.time);
+
+        /// <summary>Vacía el buffer. Llamar antes de aplicar WorldSnapshot inicial.</summary>
         public void Clear()
         {
-            _bufferCount = 0;
-            _headIndex = 0;
+            _count = 0;
         }
     }
 }

@@ -1,0 +1,69 @@
+using UnityEngine;
+using UnityEngine.UI;
+
+public class PickupIndicator : MonoBehaviour
+{
+    [Header("UI")]
+    public Canvas worldCanvas;
+    public Image iconImage;
+    public float showRadius = 2.5f;
+
+    [Header("Animación")]
+    public float pulseSpeed = 2f;
+    public float pulseMinScale = 0.85f;
+    public float pulseMaxScale = 1.15f;
+
+    private Transform player;
+    private bool isVisible = false;
+
+    void Start()
+    {
+        GameObject p = GameObject.FindWithTag("Player");
+        if (p != null) player = p.transform;
+
+        if (worldCanvas != null)
+            worldCanvas.gameObject.SetActive(false);
+    }
+
+    void Update()
+    {
+        if (player == null)
+        {
+            GameObject p = GameObject.FindWithTag("Player");
+            if (p != null) player = p.transform;
+            return;
+        }
+
+        PlayerController pc = player.GetComponent<PlayerController>();
+        if (pc == null || pc.mainCamera == null) return;
+
+        Transform cam = pc.mainCamera.transform;
+        Ray ray = new Ray(cam.position, cam.forward);
+        bool aimed = false;
+
+        if (Physics.Raycast(ray, out RaycastHit hit, pc.pickupRayLength))
+            aimed = hit.collider.gameObject == gameObject;
+
+        float dist = Vector3.Distance(transform.position, player.position);
+        bool inRange = dist <= showRadius && aimed;
+
+        if (inRange != isVisible)
+        {
+            isVisible = inRange;
+            if (worldCanvas != null)
+                worldCanvas.gameObject.SetActive(isVisible);
+        }
+
+        if (isVisible)
+        {
+            if (worldCanvas != null)
+                worldCanvas.transform.LookAt(cam);
+
+            float scale = Mathf.Lerp(pulseMinScale, pulseMaxScale,
+                (Mathf.Sin(Time.time * pulseSpeed) + 1f) * 0.5f);
+
+            if (iconImage != null)
+                iconImage.transform.localScale = Vector3.one * scale;
+        }
+    }
+}

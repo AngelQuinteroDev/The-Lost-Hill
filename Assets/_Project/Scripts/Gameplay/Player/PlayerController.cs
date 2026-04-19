@@ -23,25 +23,45 @@ namespace TheLostHill.Gameplay.Player
 
         private CharacterController _cc;
         private ClientSidePrediction _prediction;
-        
-        // Asignado por el manager al instanciar este prefab
-        public bool IsLocalPlayer { get; set; } = false;
+
+        private bool _isLocalPlayer = false;
+        public bool IsLocalPlayer
+        {
+            get => _isLocalPlayer;
+            set
+            {
+                if (_isLocalPlayer == value) return;
+                _isLocalPlayer = value;
+                ApplyOwnershipState();
+            }
+        }
 
         private void Awake()
         {
             _cc = GetComponent<CharacterController>();
             _prediction = GetComponent<ClientSidePrediction>();
+            ApplyOwnershipState();
         }
 
         private void Start()
         {
-            // Configuración de cámara
-            if (PlayerCamera != null)
-            {
-                PlayerCamera.enabled = IsLocalPlayer;
-                // También el listener de audio para evitar warnings de Unity
-                if (PlayerListener != null) PlayerListener.enabled = IsLocalPlayer;
-            }
+            ApplyOwnershipState();
+        }
+
+        public void Initialize(bool isLocalPlayer)
+        {
+            IsLocalPlayer = isLocalPlayer;
+        }
+
+        private void ApplyOwnershipState()
+        {
+            if (_cc == null) _cc = GetComponent<CharacterController>();
+            if (_prediction == null) _prediction = GetComponent<ClientSidePrediction>();
+
+            if (PlayerCamera != null) PlayerCamera.enabled = _isLocalPlayer;
+            if (PlayerListener != null) PlayerListener.enabled = _isLocalPlayer;
+            if (_cc != null) _cc.enabled = _isLocalPlayer;
+            if (_prediction != null) _prediction.enabled = _isLocalPlayer;
         }
 
         private void Update()
@@ -78,6 +98,21 @@ namespace TheLostHill.Gameplay.Player
             }
 
             _prediction.ProcessLocalInput(inputDir, sprint, Time.deltaTime);
+        }
+
+        public void ApplyRemoteInput(float inputX, float inputZ, bool sprint)
+        {
+            if (IsLocalPlayer || _cc == null) return;
+
+            Vector3 inputDir = new Vector3(inputX, 0f, inputZ);
+            if (inputDir.sqrMagnitude > 0.0001f)
+            {
+                Quaternion targetRot = Quaternion.LookRotation(inputDir.normalized);
+                transform.rotation = Quaternion.Slerp(transform.rotation, targetRot, RotationSpeed * Time.deltaTime);
+            }
+
+            float speed = sprint ? SprintSpeed : WalkSpeed;
+            _cc.Move(inputDir.normalized * speed * Time.deltaTime);
         }
     }
 }
