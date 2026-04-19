@@ -45,6 +45,9 @@ public class CollectibleItem : MonoBehaviour
         if (indicatorCanvas != null)
             Destroy(indicatorCanvas);
 
+        if (ItemCounter.Instance != null)
+            ItemCounter.Instance.OnItemCollected();
+
         Destroy(gameObject);
     }
 }

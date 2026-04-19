@@ -337,7 +337,7 @@ PrefabInstance:
     - target: {fileID: -8926642307868644731, guid: 17df336ff9e1f3144a505632f47b9b7a, type: 3}
       propertyPath: 'm_Materials.Array.data[0]'
       value: 
-      objectReference: {fileID: 2100000, guid: 662f2e7f19225524f98f9f743c66feea, type: 2}
+      objectReference: {fileID: 2100000, guid: 3d869507c26fc8d4dac840b34728785e, type: 2}
     - target: {fileID: -8679921383154817045, guid: 17df336ff9e1f3144a505632f47b9b7a, type: 3}
       propertyPath: m_LocalPosition.x
       value: 0
@@ -381,7 +381,7 @@ PrefabInstance:
     - target: {fileID: -3337818134457536549, guid: 17df336ff9e1f3144a505632f47b9b7a, type: 3}
       propertyPath: 'm_Materials.Array.data[0]'
       value: 
-      objectReference: {fileID: 2100000, guid: 662f2e7f19225524f98f9f743c66feea, type: 2}
+      objectReference: {fileID: 2100000, guid: 94201b9bb6e4fa442b771db5cde3e311, type: 2}
     - target: {fileID: 919132149155446097, guid: 17df336ff9e1f3144a505632f47b9b7a, type: 3}
       propertyPath: m_Name
       value: Hazmat Suit

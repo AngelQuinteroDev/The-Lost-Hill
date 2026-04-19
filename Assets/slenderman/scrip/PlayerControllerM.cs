@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
+using TMPro;
 using System.Collections;
 
 [RequireComponent(typeof(CharacterController), typeof(Animator), typeof(PlayerInput))]
@@ -9,7 +10,7 @@ public class PlayerControllerM : MonoBehaviour
     public float walkSpeed = 4f;
     public float runSpeed = 8f;
 
-    [Header("C�mara primera persona")]
+    [Header("Cámara primera persona")]
     public Transform playerCamera;
     public Camera mainCamera;
     public float mouseSensitivity = 2f;
@@ -21,6 +22,11 @@ public class PlayerControllerM : MonoBehaviour
 
     [Header("Respawn")]
     public Transform spawnPoint;
+    public float respawnDelay = 10f;
+
+    [Header("UI Muerte")]
+    public GameObject respawnPanel;
+    public TMP_Text countdownText;
 
     [Header("Multijugador")]
     public Renderer[] playerMeshRenderers;
@@ -29,6 +35,7 @@ public class PlayerControllerM : MonoBehaviour
     private Animator anim;
     private Vector3 velocity;
     private bool isAlive = true;
+    private bool canMove = true;
 
     private Vector2 moveInput;
     private Vector2 lookInput;
@@ -37,6 +44,7 @@ public class PlayerControllerM : MonoBehaviour
     private static readonly int AnimRun = Animator.StringToHash("isRunning");
     private static readonly int AnimIdle = Animator.StringToHash("isIdle");
     private static readonly int AnimPickup = Animator.StringToHash("isPickingUp");
+    private static readonly int AnimDeath = Animator.StringToHash("isDead");
 
     private PlayerInput _playerInput;
     private InputAction _interactAction;
@@ -75,6 +83,8 @@ public class PlayerControllerM : MonoBehaviour
             if (_interactAction != null)
                 _interactAction.started += OnInteract;
         }
+
+        if (respawnPanel != null) respawnPanel.SetActive(false);
     }
 
     private void OnDestroy()
@@ -128,7 +138,8 @@ public class PlayerControllerM : MonoBehaviour
     {
         if (!isAlive || !_isLocalPlayer) return;
         HandleCamera();
-        HandleMovement();
+        if (canMove) HandleMovement();
+        else StopMovement();
     }
 
     void HandleCamera()
@@ -171,17 +182,54 @@ public class PlayerControllerM : MonoBehaviour
         NetIsRunning = running;
     }
 
+    void StopMovement()
+    {
+        velocity = Vector3.zero;
+        moveInput = Vector2.zero;
+
+        anim.SetBool(AnimRun, false);
+        anim.SetBool(AnimWalk, false);
+        anim.SetBool(AnimIdle, false);
+    }
+
     public void OnCaughtByEnemy()
     {
         if (!isAlive) return;
-        StartCoroutine(RespawnRoutine());
+        StartCoroutine(DeathRoutine());
     }
 
-    IEnumerator RespawnRoutine()
+    IEnumerator DeathRoutine()
     {
         isAlive = false;
+        canMove = false;
 
-        yield return new WaitForSeconds(1.5f);
+        anim.SetBool(AnimRun, false);
+        anim.SetBool(AnimWalk, false);
+        anim.SetBool(AnimIdle, false);
+        anim.SetBool(AnimPickup, false);
+        anim.SetBool(AnimDeath, true);
+
+        if (respawnPanel != null) respawnPanel.SetActive(true);
+
+        float remaining = respawnDelay;
+        while (remaining > 0f)
+        {
+            if (countdownText != null)
+            {
+                countdownText.gameObject.SetActive(false);
+                countdownText.gameObject.SetActive(true);
+                countdownText.text = "Reapareciendo en " + Mathf.CeilToInt(remaining) + "...";
+                countdownText.ForceMeshUpdate();
+            }
+
+            yield return new WaitForSeconds(1f);
+            remaining -= 1f;
+        }
+
+        if (respawnPanel != null) respawnPanel.SetActive(false);
+        if (countdownText != null) countdownText.text = "";
+
+        anim.SetBool(AnimDeath, false);
 
         cc.enabled = false;
         transform.position = spawnPoint != null ? spawnPoint.position : Vector3.zero;
@@ -192,12 +240,10 @@ public class PlayerControllerM : MonoBehaviour
             playerCamera.localEulerAngles = Vector3.zero;
 
         isAlive = true;
+        canMove = true;
         moveInput = Vector2.zero;
 
-        anim.SetBool(AnimRun, false);
-        anim.SetBool(AnimWalk, false);
         anim.SetBool(AnimIdle, true);
-        anim.SetBool(AnimPickup, false);
 
         NetIsMoving = false;
         NetIsRunning = false;
@@ -229,7 +275,7 @@ public class PlayerControllerM : MonoBehaviour
 
     public void TryPickup()
     {
-        if (!isAlive || !_isLocalPlayer || mainCamera == null) return;
+        if (!isAlive || !canMove || !_isLocalPlayer || mainCamera == null) return;
 
         Ray ray = mainCamera.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0f));
         Debug.DrawRay(ray.origin, ray.direction * pickupRayLength, Color.green, 1.5f);
@@ -277,7 +323,7 @@ public class PlayerControllerM : MonoBehaviour
 
         float speed = NetIsRunning ? runSpeed : walkSpeed;
         Vector3 move = inputDir.normalized * speed;
-        
+
         if (cc != null && cc.enabled)
             cc.Move(move * Time.deltaTime);
         else
