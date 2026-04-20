@@ -155,7 +155,17 @@ namespace TheLostHill.UI.Lobby
             LobbyPlayerEntry entry = go.GetComponent<LobbyPlayerEntry>();
             if (entry != null)
             {
-                entry.Setup(playerName, status);
+                // Solo el host puede kickear, y no a si mismo (ID 0)
+                bool canKick = GameManager.Instance.Role == NetworkRole.Host && id != 0;
+                
+                entry.Setup(id, playerName, status, canKick, (kickedId) => 
+                {
+                    if (GameManager.Instance.Role == NetworkRole.Host)
+                    {
+                        Debug.Log($"[LobbyUI] Kicking player {kickedId}");
+                        GameManager.Instance.HostManager.KickPlayer(kickedId, "Expulsado por el host.");
+                    }
+                });
                 _playerEntries[id] = entry;
             }
         }

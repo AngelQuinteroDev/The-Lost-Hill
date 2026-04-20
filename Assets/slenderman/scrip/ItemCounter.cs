@@ -178,6 +178,6 @@ public class ItemCounter : MonoBehaviour
     private void UpdateUI()
     {
         if (counterText != null)
-            counterText.text = "Páginas recogidas: " + CollectedCount + " / " + TotalItems;
+            counterText.text = CollectedCount + " / " + TotalItems;
     }
 }

@@ -16,10 +16,18 @@ namespace TheLostHill.UI
 
         private void Start()
         {
-            ShowMenu(MainMenuPanel);
-
             // Suscribirse a cambios de estado globales
-            GameManager.Instance.StateMachine.OnStateChanged += HandleStateChanged;
+            if (GameManager.Instance != null && GameManager.Instance.StateMachine != null)
+            {
+                GameManager.Instance.StateMachine.OnStateChanged += HandleStateChanged;
+            }
+
+            SyncInitialUIState();
+        }
+
+        private void OnEnable()
+        {
+            SyncInitialUIState();
         }
 
         private void OnDestroy()
@@ -45,6 +53,43 @@ namespace TheLostHill.UI
                     HideAll();
                     break;
             }
+        }
+
+        /// <summary>
+        /// Garantiza que la UI arranque en MainMenu cuando no existe una sesión válida.
+        /// Evita que clientes queden mostrando Lobby por estado/rol residual.
+        /// </summary>
+        private void SyncInitialUIState()
+        {
+            var gm = GameManager.Instance;
+            if (gm == null || gm.StateMachine == null)
+            {
+                ShowMenu(MainMenuPanel);
+                return;
+            }
+
+            bool hasActiveHostSession =
+                gm.Role == NetworkRole.Host &&
+                gm.HostManager != null &&
+                gm.HostManager.IsHosting;
+
+            bool hasActiveClientSession =
+                gm.Role == NetworkRole.Client &&
+                gm.ClientHandler != null &&
+                (gm.ClientHandler.IsConnected || gm.ClientHandler.IsConnecting);
+
+            if (!hasActiveHostSession && !hasActiveClientSession)
+            {
+                if (gm.Role != NetworkRole.None || gm.StateMachine.CurrentState != GameState.MainMenu)
+                {
+                    gm.LeaveSession();
+                }
+
+                ShowMenu(MainMenuPanel);
+                return;
+            }
+
+            HandleStateChanged(gm.StateMachine.CurrentState, gm.StateMachine.CurrentState);
         }
 
         public void ShowHostSetup() => ShowMenu(HostSetupPanel);
