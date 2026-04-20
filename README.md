@@ -8,13 +8,13 @@ Todo el entorno de red está construido desde cero utilizando una **arquitectura
 
 ##  Tabla de Contenidos
 
-1. [Descripción y Jugabilidad](#-jugabilidad)
-2. [Interfaces de Usuario (UI)](#-interfaces-de-usuario-ui)
-3. [Tecnología y Requisitos](#-tecnología-y-requisitos)
-4. [Arquitectura de Red (Sistema UDP)](#-arquitectura-de-red-sistema-udp)
-5. [Manejo de Errores y Seguridad](#-manejo-de-errores-y-seguridad)
-6. [Estructura del Proyecto y Scripts Clave](#-estructura-del-proyecto-y-scripts-clave)
-7. [Mejores Prácticas y Patrones](#-mejores-prácticas-y-patrones)
+1. Descripción y Jugabilidad
+2. Interfaces de Usuario (UI)
+3. Tecnología y Requisitos
+4. Arquitectura de Red (Sistema UDP
+5. Manejo de Errores y Seguridad
+6. Estructura del Proyecto y Scripts Clave
+7. Mejores Prácticas y Patrones
 
 ---
 
