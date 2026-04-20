@@ -146,9 +146,6 @@ Los paquetes necesarios ya están definidos en `Packages/manifest.json`.
 
 ## Estructura del proyecto
 
-<details>
-<summary>Ver estructura de scripts</summary>
-
 ```text
 Assets/Scripts/
 ├── Admin/
