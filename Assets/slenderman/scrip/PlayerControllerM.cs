@@ -136,6 +136,16 @@ public class PlayerControllerM : MonoBehaviour
 
     void Update()
     {
+        // Parar el movimiento si el host pausó todo, o si el jugador local apretó ESC y abrió su menú
+        bool isGloballyPaused = TheLostHill.UI.HUD.PauseMenuUI.IsPaused;
+        bool isLocalMenuOpen = TheLostHill.UI.HUD.PauseMenuUI.Instance != null && TheLostHill.UI.HUD.PauseMenuUI.Instance.IsMenuOpen;
+        
+        if (isGloballyPaused || isLocalMenuOpen) 
+        {
+            if (_isLocalPlayer) StopMovement();
+            return; 
+        }
+        
         if (!isAlive || !_isLocalPlayer) return;
         HandleCamera();
         if (canMove) HandleMovement();
@@ -185,7 +195,9 @@ public class PlayerControllerM : MonoBehaviour
     void StopMovement()
     {
         velocity = Vector3.zero;
-        moveInput = Vector2.zero;
+        // NOTA: NO borrar moveInput aquí. 
+        // Si el jugador mantiene pulsado "W" durante la pausa, al quitar la pausa su personaje volverá a caminar.
+        // moveInput = Vector2.zero;
 
         anim.SetBool(AnimRun, false);
         anim.SetBool(AnimWalk, false);

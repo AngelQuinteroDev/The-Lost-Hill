@@ -401,17 +401,18 @@ namespace TheLostHill.Gameplay
                     DespawnPlayer(left.PlayerId);
                     break;
 
-                // Kick recibido: desconectarse
-                case KickPlayerMessage kick when kick.TargetPlayerId == _gm.LocalPlayerId:
-                    Debug.Log($"[NetworkSpawner] Fuiste expulsado: {kick.Reason}");
-                    _client.Disconnect();
-                    _gm.ChangeState(GameState.MainMenu);
-                    UnityEngine.SceneManagement.SceneManager.LoadScene(Constants.MainMenuScene);
-                    break;
-
                 // Sync the monster from host
                 case MonsterStateMessage monsterState:
                     HandleMonsterState(monsterState);
+                    break;
+                    
+                // Pause and Resume global events from host
+                case PauseGameMessage _:
+                    TheLostHill.UI.HUD.PauseMenuUI.ApplyRemotePauseState(true);
+                    break;
+                    
+                case ResumeGameMessage _:
+                    TheLostHill.UI.HUD.PauseMenuUI.ApplyRemotePauseState(false);
                     break;
             }
         }

@@ -112,6 +112,9 @@ namespace TheLostHill.Core
             if (_isLeaving) return;
             _isLeaving = true;
 
+            // Cambiar estado a MainMenu PRIMERO, así el Host lanza el StateChange a los clientes antes de detener su servidor
+            StateMachine.ChangeState(GameState.MainMenu);
+
             if (Role == NetworkRole.Host)
             {
                 HostManager?.StopHost();
@@ -122,7 +125,6 @@ namespace TheLostHill.Core
             }
 
             Role = NetworkRole.None;
-            StateMachine.ChangeState(GameState.MainMenu);
             
             _isLeaving = false;
         }

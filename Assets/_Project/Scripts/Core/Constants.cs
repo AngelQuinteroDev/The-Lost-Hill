@@ -18,8 +18,8 @@ namespace TheLostHill.Core
         // ── Timeouts (segundos) ──────────────────────────────────
         public const float ConnectionTimeout = 15f;
         public const float TcpKeepAliveInterval = 10f;
-        // Más margen para pruebas con ventanas en background (Multiplayer Center)
-        public const float DisconnectTimeout = 90f;
+        // Timeout bajado a 5s para que los jugadores desaparezcan rápido si cierran el juego ("desaparezca el modelo luego de un tiempo...")
+        public const float DisconnectTimeout = 5f;
 
         // ── Ping ─────────────────────────────────────────────────
         public const float PingInterval = 1f;

@@ -79,18 +79,32 @@ namespace TheLostHill.Core
 
         private void HandleSceneTransition(GameState state)
         {
+            string sceneToLoad = "";
             switch (state)
             {
                 case GameState.MainMenu:
-                    SceneLoader.Instance.LoadScene("MainScene");
+                    sceneToLoad = "MainScene";
                     break;
                 case GameState.Lobby:
                     // El lobby suele ser un panel en la escena de menú o una escena propia
-                    // Si es una escena propia: SceneLoader.Instance.LoadScene("LobbyScene");
+                    // Si es una escena propia: sceneToLoad = "LobbyScene";
                     break;
                 case GameState.Playing:
-                    SceneLoader.Instance.LoadScene("GameplayScene");
+                    sceneToLoad = "GameplayScene";
                     break;
+            }
+
+            if (!string.IsNullOrEmpty(sceneToLoad))
+            {
+                if (SceneLoader.Instance != null)
+                {
+                    SceneLoader.Instance.LoadScene(sceneToLoad);
+                }
+                else
+                {
+                    Debug.LogWarning($"[GameStateMachine] SceneLoader no encontrado (quizás empezaste directo desde la escena). Usando SceneManager directo para: {sceneToLoad}");
+                    UnityEngine.SceneManagement.SceneManager.LoadScene(sceneToLoad);
+                }
             }
         }
 
@@ -101,7 +115,15 @@ namespace TheLostHill.Core
                 GameState newState = (GameState)stateChange.NewState;
                 if (CurrentState != newState)
                 {
-                    ChangeState(newState); // Usar ChangeState para que también cargue la escena localmente
+                    if (newState == GameState.MainMenu)
+                    {
+                        Debug.Log("[GameStateMachine] Host cambió a MainMenu. Saliendo de la sesión limpiamente...");
+                        GameManager.Instance.LeaveSession();
+                    }
+                    else
+                    {
+                        ChangeState(newState); // Usar ChangeState para que también cargue la escena localmente
+                    }
                 }
             }
         }

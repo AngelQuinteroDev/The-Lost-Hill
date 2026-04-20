@@ -79,6 +79,14 @@ namespace TheLostHill.Network.Host
             try
             {
                 _udpClient = new UdpClient(_listenPort);
+                
+                // Evitar excepción 10054 (ConnectionReset) en Windows cuando un cliente se desconecta a la fuerza
+                if (System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows))
+                {
+                    const int SIO_UDP_CONNRESET = -1744830452;
+                    _udpClient.Client.IOControl((System.Net.Sockets.IOControlCode)SIO_UDP_CONNRESET, new byte[] { 0, 0, 0, 0 }, null);
+                }
+
                 _isRunning = true;
 
                 _udpReceiveThread = new Thread(UdpReceiveLoop)
@@ -179,9 +187,10 @@ namespace TheLostHill.Network.Host
 
                     IncomingQueue.EnqueueInbound(msg);
                 }
-                catch (SocketException) when (!_isRunning)
+                catch (SocketException se) when (!_isRunning || se.SocketErrorCode == System.Net.Sockets.SocketError.ConnectionReset)
                 {
-                    break;
+                    if (!_isRunning) break;
+                    // Ignore 10054 on Windows if somehow IOControl failed or isn't used
                 }
                 catch (ObjectDisposedException)
                 {

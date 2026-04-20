@@ -344,6 +344,24 @@ namespace TheLostHill.Network.Client
                     continue;
                 }
 
+                if (msg is KickPlayerMessage kick)
+                {
+                    if (kick.TargetPlayerId == LocalPlayerId)
+                    {
+                        Debug.LogWarning($"[Client] Kickeado del servidor. Razón: {kick.Reason}");
+                        
+                        _isRunning = false;
+                        CleanupUdp();
+                        IsConnected = false;
+                        IsConnecting = false;
+                        OnDisconnected?.Invoke();
+
+                        // En vez de intentar reconexión, salimos limpiamente al menú principal
+                        GameManager.Instance.LeaveSession();
+                    }
+                    continue; 
+                }
+
                 if (!IsConnected)
                 {
                     if (msg is PlayerJoinedMessage || msg is PlayerLeftMessage)
