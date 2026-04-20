@@ -144,6 +144,8 @@ public class ItemCounter : MonoBehaviour
         }
     }
 
+    private bool _hasWon = false;
+
     private void ConfirmCollection(int itemId)
     {
         if (itemsMap.TryGetValue(itemId, out CollectibleItem item) && item != null)
@@ -153,8 +155,75 @@ public class ItemCounter : MonoBehaviour
             CollectedCount++;
             UpdateUI();
             
-            // Check win condition?
-            // if (CollectedCount == TotalItems) TriggerWin();
+            // Check win condition
+            if (CollectedCount >= TotalItems && !_hasWon)
+            {
+                TriggerWin();
+            }
+        }
+    }
+
+    private void TriggerWin()
+    {
+        _hasWon = true;
+
+        // Congelamos el tiempo
+        Time.timeScale = 0f;
+
+        // Crear una interfaz de victoria generada por código para todos
+        GameObject winCanvasObj = new GameObject("WinCanvas");
+        Canvas canvas = winCanvasObj.AddComponent<Canvas>();
+        canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+        canvas.sortingOrder = 999;
+        
+        var scaler = winCanvasObj.AddComponent<UnityEngine.UI.CanvasScaler>();
+        scaler.uiScaleMode = UnityEngine.UI.CanvasScaler.ScaleMode.ScaleWithScreenSize;
+        scaler.referenceResolution = new Vector2(1920, 1080);
+        
+        winCanvasObj.AddComponent<UnityEngine.UI.GraphicRaycaster>();
+
+        GameObject bgObj = new GameObject("WinBackground");
+        bgObj.transform.SetParent(winCanvasObj.transform, false);
+        var bgImage = bgObj.AddComponent<UnityEngine.UI.Image>();
+        bgImage.color = new Color(0, 0, 0, 0.85f);
+        var bgRect = bgImage.rectTransform;
+        bgRect.anchorMin = Vector2.zero;
+        bgRect.anchorMax = Vector2.one;
+        bgRect.sizeDelta = Vector2.zero;
+
+        GameObject textObj = new GameObject("WinText");
+        textObj.transform.SetParent(winCanvasObj.transform, false);
+        var winText = textObj.AddComponent<TextMeshProUGUI>();
+        winText.text = "¡ALL ITEMS COLLECTED! YOU WIN!";
+        winText.fontSize = 72;
+        winText.alignment = TextAlignmentOptions.Center;
+        winText.color = Color.yellow;
+        var textRect = winText.rectTransform;
+        textRect.anchorMin = Vector2.zero;
+        textRect.anchorMax = Vector2.one;
+        textRect.sizeDelta = Vector2.zero;
+
+        // Desbloquear cursor para que los jugadores puedan usar la UI al volver
+        Cursor.lockState = CursorLockMode.None;
+        Cursor.visible = true;
+
+        // Solo el host inicia el conteo hacia el menú principal para evitar conflictos
+        if (GameManager.Instance != null && GameManager.Instance.IsHost)
+        {
+            StartCoroutine(ReturnToMainMenuCoroutine());
+        }
+    }
+
+    private System.Collections.IEnumerator ReturnToMainMenuCoroutine()
+    {
+        yield return new WaitForSecondsRealtime(5f); // 5 segundos en la pantalla de ganadores
+        
+        // Restaurar tiempo antes de salir para que cosas no se queden congeladas en el MainMenu
+        Time.timeScale = 1f;
+
+        if (GameManager.Instance != null)
+        {
+            GameManager.Instance.LeaveSession();
         }
     }
 

@@ -242,6 +242,11 @@ namespace TheLostHill.Network.Client
             _receiveThread?.Join(800);
             _receiveThread = null;
 
+            // Asegurarnos de que el tiempo y cursor regresen a estado normal al desconectar
+            Time.timeScale = 1f;
+            UnityEngine.Cursor.lockState = UnityEngine.CursorLockMode.None;
+            UnityEngine.Cursor.visible = true;
+
             Debug.Log("[Client] Desconectado.");
             OnDisconnected?.Invoke();
         }

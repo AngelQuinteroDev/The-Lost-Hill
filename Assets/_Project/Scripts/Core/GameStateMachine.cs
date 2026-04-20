@@ -79,6 +79,9 @@ namespace TheLostHill.Core
 
         private void HandleSceneTransition(GameState state)
         {
+            // Siempre asegurarnos de que el juego corra a velocidad normal al cambiar de escena
+            Time.timeScale = 1f;
+
             string sceneToLoad = "";
             switch (state)
             {
