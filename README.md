@@ -1,5 +1,8 @@
 # The Lost Hill 
 
+## Video
+https://youtu.be/0MUs7fMn4s8
+---
 **The Lost Hill** es un videojuego multijugador cooperativo de terror y supervivencia desarrollado en Unity. Los jugadores deberán adentrarse en un bosque oscuro, cooperar para encontrar una serie de objetos coleccionables y sobrevivir al acecho de entidades hostiles antes de que sea demasiado tarde. 
 
 Todo el entorno de red está construido desde cero utilizando una **arquitectura de red UDP propia (Host-Autoritativo)** que optimiza el rendimiento y sincroniza el estado del mundo de forma fluida y segura.
