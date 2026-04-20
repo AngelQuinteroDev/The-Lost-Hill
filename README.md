@@ -49,7 +49,7 @@ La interfaz limpia cuenta con contador de objetos y estados de los jugadores.
 Al presionar `ESC`, se despliega un **Menú de Pausa Sincronizado**:
 - Si el **Host** pausa, el juego se detiene globalmente para todos los clientes (aplicando un freno físico total).
 - Los clientes solo pueden visualizar la pantalla de interrupción o abandonar la partida de forma segura.
-> [Pause Menu] <img width="1238" height="691" alt="image" src="https://github.com/user-attachments/assets/1078c423-a61d-4758-b4fa-c9c9aecc350d" />
+> [Pause Menu] <img width="1265" height="711" alt="image" src="https://github.com/user-attachments/assets/c1b62c10-f6d0-4d8d-89b1-3642d4dc5826" />
 
 ### 4. Pantalla de Victoria / Resultados
 Una pantalla autogenerada por código con un *Overlay* oscuro que confirma la recolección absoluta de todos los fragmentos y devuelve automáticamente la sala al Menú.
