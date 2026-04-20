@@ -1,6 +1,4 @@
-# 🌲 The Lost Hill 🌑
-
-![Banner del Proyecto](docs/images/banner_placeholder.png) <!-- Reemplaza con una imagen panorámica de tu juego -->
+# The Lost Hill 
 
 **The Lost Hill** es un videojuego multijugador cooperativo de terror y supervivencia desarrollado en Unity. Los jugadores deberán adentrarse en un bosque oscuro, cooperar para encontrar una serie de objetos coleccionables y sobrevivir al acecho de entidades hostiles antes de que sea demasiado tarde. 
 
@@ -8,19 +6,19 @@ Todo el entorno de red está construido desde cero utilizando una **arquitectura
 
 ---
 
-## 📋 Tabla de Contenidos
+##  Tabla de Contenidos
 
-1. [Descripción y Jugabilidad](#-jugabilidad)
-2. [Interfaces de Usuario (UI)](#-interfaces-de-usuario-ui)
-3. [Tecnología y Requisitos](#-tecnología-y-requisitos)
-4. [Arquitectura de Red (Sistema UDP)](#-arquitectura-de-red-sistema-udp)
-5. [Manejo de Errores y Seguridad](#-manejo-de-errores-y-seguridad)
-6. [Estructura del Proyecto y Scripts Clave](#-estructura-del-proyecto-y-scripts-clave)
-7. [Mejores Prácticas y Patrones](#-mejores-prácticas-y-patrones)
+1. Descripción y Jugabilidad
+2. Interfaces de Usuario (UI)
+3. Tecnología y Requisitos
+4. Arquitectura de Red (Sistema UDP
+5. Manejo de Errores y Seguridad
+6. Estructura del Proyecto y Scripts Clave
+7. Mejores Prácticas y Patrones
 
 ---
 
-## 🎮 Jugabilidad
+## Jugabilidad
 
 - **Objetivo Principal:** El equipo debe explorar el mapa y encontrar **todos los objetos coleccionables** dispersos antes de ser atrapados.
 - **Multijugador Cooperativo:** Un jugador toma el rol de **Host** (servidor local y jugador) mientras otros se unen como **Clientes**.
@@ -28,7 +26,7 @@ Todo el entorno de red está construido desde cero utilizando una **arquitectura
 
 ---
 
-## 🖼️ Interfaces de Usuario (UI)
+## Interfaces de Usuario (UI)
 
 El juego cuenta con un flujo completo de menús escalables y adaptados para funcionar en multijugador:
 
@@ -53,7 +51,7 @@ Una pantalla autogenerada por código con un *Overlay* oscuro que confirma la re
 
 ---
 
-## ⚙️ Tecnología y Requisitos
+## Tecnología y Requisitos
 
 - **Motor Gráfico:** Unity (Soporte Universal Render Pipeline/HDRP - *Especificar versión*).
 - **Lenguaje:** C# (.NET).
@@ -63,7 +61,7 @@ Una pantalla autogenerada por código con un *Overlay* oscuro que confirma la re
 
 ---
 
-## 📡 Arquitectura de Red (Sistema UDP)
+## Arquitectura de Red (Sistema UDP)
 
 El manejo multijugador no depende de *Netcode for GameObjects* ni *Mirror*, sino que ha sido **escrito puramente sobre Sockets UDP (`System.Net.Sockets`)**.
 
@@ -89,7 +87,7 @@ graph TD
 
 ---
 
-## 🛡️ Manejo de Errores y Seguridad
+## Manejo de Errores y Seguridad
 
 - **UDP ConnectionReset Bug (Windows 10054):** Manejo de problemas nativos de Windows donde se colapsa todo el hilo de escucha cuando un cliente realiza un "Alt+F4". Mitigado forzando el código IOControl de bajo nivel `SIO_UDP_CONNRESET` sobre el socket.
 - **Thread Safety:** Las colas UDP recogen la data en un *background thread* y utilizan candados lógicos (`lock`) y delegaciones concurrentes para trasladar la manipulación de objetos al hilo principal de Unity evitando `InvalidOperationExceptions`.
@@ -97,22 +95,22 @@ graph TD
 
 ---
 
-## 🎯 Cumplimiento de Arquitectura (Plan vs Realidad)
+## Cumplimiento de Arquitectura (Plan vs Realidad)
 
 El desarrollo del juego siguió estrictamente el documento de **Arquitectura y Plan de Desarrollo**, logrando implementar las fases fundamentales de redes y mecánicas:
 
 | Fase de Desarrollo | Estado Actual | Detalles de Implementación en el Proyecto |
 | :--- | :---: | :--- |
-| **Fase 1: Infraestructura** | ✅ Completada | Sistema construido con `System.Net.Sockets` (UDP dominante para evitar overhead TCP). Se crearon el `HostNetworkManager`, `ClientNetworkHandler`, una `MessageQueue` Thread-Safe bidireccional y el `PacketSerializer` en binario.
-| **Fase 2: Lobby y Sesiones** | ✅ Completada | Máquina de estados completa a través de `GameStateMachine.cs` (Lobby → Playing → MainMenu). Se integraron las interfaces `JoinUI`, visualización de IPs y un sistema de control de clientes (Eventos de Desconexión).
-| **Fase 3: Movimiento en Red** | ✅ Completada | **Player-Host Architecture**. Los clientes usan predicción local mientras envían *Inputs* (`PLAYER_INPUT`). El servidor valida físicas y responde con deltas (`WORLD_STATE`). Se usa interpolación para mitigar el lag visual.
-| **Fase 4: Gameplay (Objetos)** | ✅ Completada | Implementación determinista en `ItemCounter.cs` y `CollectibleItem.cs`. El recuento es autoritativo (validado en el Host) y radiado a clientes. *Nota: La lógica extendida del pathfinding del Monstruo está en constante evolución.*
-| **Fase 5: Panel Admin (Host)** | ✅ Completada | El Host posee privilegios exclusivos: Puede expulsar (*kick*) jugadores desde el Lobby y cuenta con un sistema de pausa absoluta validada en todos los clientes interceptando *GameStateChanges*. 
-| **Fase 6: Ciclo y UI Final** | ✅ Completada | Pantalla de victoria autogenerada y sincronizada al encontrar todos los objetos. Regreso seguro al menú liberando congelamiento de hilos (`Time.timeScale`) e interfaces unificadas.
+| **Fase 1: Infraestructura** | Completada | Sistema construido con `System.Net.Sockets` (UDP dominante para evitar overhead TCP). Se crearon el `HostNetworkManager`, `ClientNetworkHandler`, una `MessageQueue` Thread-Safe bidireccional y el `PacketSerializer` en binario.
+| **Fase 2: Lobby y Sesiones** | Completada | Máquina de estados completa a través de `GameStateMachine.cs` (Lobby → Playing → MainMenu). Se integraron las interfaces `JoinUI`, visualización de IPs y un sistema de control de clientes (Eventos de Desconexión).
+| **Fase 3: Movimiento en Red** | Completada | **Player-Host Architecture**. Los clientes usan predicción local mientras envían *Inputs* (`PLAYER_INPUT`). El servidor valida físicas y responde con deltas (`WORLD_STATE`). Se usa interpolación para mitigar el lag visual.
+| **Fase 4: Gameplay (Objetos)** | Completada | Implementación determinista en `ItemCounter.cs` y `CollectibleItem.cs`. El recuento es autoritativo (validado en el Host) y radiado a clientes. *Nota: La lógica extendida del pathfinding del Monstruo está en constante evolución.*
+| **Fase 5: Panel Admin (Host)** | Completada | El Host posee privilegios exclusivos: Puede expulsar (*kick*) jugadores desde el Lobby y cuenta con un sistema de pausa absoluta validada en todos los clientes interceptando *GameStateChanges*. 
+| **Fase 6: Ciclo y UI Final** | Completada | Pantalla de victoria autogenerada y sincronizada al encontrar todos los objetos. Regreso seguro al menú liberando congelamiento de hilos (`Time.timeScale`) e interfaces unificadas.
 
 ---
 
-## 📂 Estructura del Proyecto y Scripts Clave
+## Estructura del Proyecto y Scripts Clave
 
 La arquitectura de la carpeta `Assets/` mantiene una separación limpia de responsabilidades:
 
@@ -148,7 +146,7 @@ The-Lost-Hill/Assets/
 
 ---
 
-## 🧠 Mejores Prácticas y Patrones
+## Mejores Prácticas y Patrones
 
 1. **State Machine Pattern:** `GameStateMachine` encapsula todos los procesos duros de control del mundo, reduciendo el código espagueti.
 2. **Singleton Pattern Reestructurado:** Managers estáticos (`GameManager`, `ItemCounter`) se controlan a través de `Awake/OnDestroy` previniendo memory leaks a través de transiciones de escenas.
@@ -157,4 +155,4 @@ The-Lost-Hill/Assets/
 
 ---
 
-**Creado con ☕ y Unity para explorar los límites del código .NET de bajo nivel en videojuegos.**
+**Creado con y Unity para explorar los límites del código .NET de bajo nivel en videojuegos.**
