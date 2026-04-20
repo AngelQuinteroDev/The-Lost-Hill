@@ -146,18 +146,81 @@ Los paquetes necesarios ya están definidos en `Packages/manifest.json`.
 
 ## Estructura del proyecto
 
-| Carpeta | Responsabilidad |
-| --- | --- |
-| `Assets/Scripts/Core/` | `GameManager`, `GameStateMachine`, constantes y carga de escenas. |
-| `Assets/Scripts/Network/Host/` | Servidor, sesiones de cliente, registro de conexiones y lista de baneos. |
-| `Assets/Scripts/Network/Client/` | Cliente, ping y reconexión automática. |
-| `Assets/Scripts/Network/Shared/` | Mensajes, opcodes, serialización y colas thread-safe. |
-| `Assets/Scripts/Network/Sync/` | Interpolación, predicción y extrapolación. |
-| `Assets/Scripts/Gameplay/Player/` | Control del jugador y sincronización de estado. |
-| `Assets/Scripts/Gameplay/Collectibles/` | Coleccionables y lógica de victoria. |
-| `Assets/Scripts/Gameplay/Monster/` | IA del enemigo. |
-| `Assets/Scripts/Admin/` | Kick, ban y pausa del host. |
-| `Assets/Scripts/UI/` | Menú principal, lobby, HUD, pausa, resultados y respawn. |
+<details>
+<summary>Ver estructura de scripts</summary>
+
+```text
+Assets/Scripts/
+├── Admin/
+│   ├── AdminController.cs
+│   ├── BanSystem.cs
+│   ├── KickSystem.cs
+│   └── PauseSystem.cs
+├── Core/
+│   ├── Constants.cs
+│   ├── GameManager.cs
+│   ├── GameStateMachine.cs
+│   └── SceneLoader.cs
+├── Gameplay/
+│   ├── Collectibles/
+│   │   ├── CollectibleItem.cs
+│   │   └── CollectibleManager.cs
+│   ├── CollectibleItem.cs
+│   ├── Monster/
+│   │   └── Enemy.cs
+│   ├── Player/
+│   │   ├── PlayerController.cs
+│   │   ├── PlayerControllerM.cs
+│   │   ├── PlayerData.cs
+│   │   ├── PlayerNetworkSync.cs
+│   │   └── PlayerVisuals.cs
+│   ├── GameRules.cs
+│   ├── GameSessionManager.cs
+│   ├── ItemCounter.cs
+│   ├── NetworkSpawner.cs
+│   ├── Pausa.cs
+│   └── PickupIndicator.cs
+├── Network/
+│   ├── Client/
+│   │   ├── ClientNetworkHandler.cs
+│   │   ├── PingMonitor.cs
+│   │   └── ReconnectHandler.cs
+│   ├── Host/
+│   │   ├── BanList.cs
+│   │   ├── ClientSession.cs
+│   │   ├── ConnectionRegistry.cs
+│   │   └── HostNetworkManager.cs
+│   ├── Shared/
+│   │   ├── MessageQueue.cs
+│   │   ├── NetworkMessage.cs
+│   │   ├── NetworkProtocol.cs
+│   │   ├── PacketSerializer.cs
+│   │   └── UdpEndpointUtil.cs
+│   └── Sync/
+│       ├── ClientSidePrediction.cs
+│       ├── ExtrapolationSystem.cs
+│       └── InterpolationSystem.cs
+└── UI/
+    ├── Admin/
+    │   ├── AdminPanelUI.cs
+    │   └── GameRulesUI.cs
+    ├── HUD/
+    │   ├── CollectiblesProgressUI.cs
+    │   ├── HUDManager.cs
+    │   ├── PauseMenuUI.cs
+    │   ├── PingDisplay.cs
+    │   └── PlayerListUI.cs
+    ├── Lobby/
+    │   ├── HostSetupUI.cs
+    │   ├── JoinUI.cs
+    │   ├── LobbyPlayerEntry.cs
+    │   └── LobbyUI.cs
+    ├── Results/
+    │   ├── GameOverUI.cs
+    │   └── ResultsUI.cs
+    ├── BootUI.cs
+    └── RespawnUI.cs
+```
 
 Escenas principales:
 
