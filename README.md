@@ -1,169 +1,184 @@
 # The Lost Hill 
 
-## Video
-https://youtu.be/0MUs7fMn4s8
+## Video de Muestra
 
----
+[https://www.youtube.com/watch?v=0MUs7fMn4s8](https://www.youtube.com/watch?v=0MUs7fMn4s8)
 
-**The Lost Hill** es un videojuego multijugador cooperativo de terror y supervivencia desarrollado en Unity. Los jugadores deberán adentrarse en un bosque oscuro, cooperar para encontrar una serie de objetos coleccionables y sobrevivir al acecho de entidades hostiles antes de que sea demasiado tarde. 
+## Descripción general
 
-Todo el entorno de red está construido desde cero utilizando una **arquitectura de red UDP propia (Host-Autoritativo)** que optimiza el rendimiento y sincroniza el estado del mundo de forma fluida y segura.
+The Lost Hill es un juego multijugador cooperativo de terror y supervivencia desarrollado en Unity. La sesión se organiza con un host autoritativo: un jugador crea la partida, el resto entra como cliente usando IP y puerto. El estado del juego, los jugadores, el enemigo y los coleccionables se sincronizan con un protocolo propio sobre UDP.
 
----
+La partida arranca en `MainScene`, donde están el menú principal, el formulario para crear o unirse a una sala y el lobby. Cuando el host inicia la partida, el flujo pasa a `GameplayScene`.
 
-##  Tabla de Contenidos
-
-1. Descripción y Jugabilidad
-2. Interfaces de Usuario (UI)
-3. Tecnología y Requisitos
-4. Arquitectura de Red (Sistema UDP
-5. Manejo de Errores y Seguridad
-6. Estructura del Proyecto y Scripts Clave
-7. Mejores Prácticas y Patrones
-
----
-
-## Jugabilidad
-
-- **Objetivo Principal:** El equipo debe explorar el mapa y encontrar **todos los objetos coleccionables** dispersos antes de ser atrapados.
-- **Multijugador Cooperativo:** Un jugador toma el rol de **Host** (servidor local y jugador) mientras otros se unen como **Clientes**.
-- **Sistema de Victoria Dinámico:** Al momento en que el grupo recoja todos los objetos configurados en el mapa, el sistema bloquea los controles, congela el tiempo, notifica la victoria a todos simultáneamente y retorna la sesión a la sala principal.
-
----
-
-## Interfaces de Usuario (UI)
-
-El juego cuenta con un flujo completo de menús escalables y adaptados para funcionar en multijugador:
-
-### 1. Main Menu (Menú Principal)
-Punto de entrada. Permite a los jugadores introducir sus credenciales y elegir si desean crear una nueva partida (Host) o conectarse a una existente apuntando a una IP (Client).
-> [Main Menu] <img width="1296" height="716" alt="image" src="https://github.com/user-attachments/assets/ef72a922-1ed3-4c45-a00b-5801823bc23c" />
-
-### 2. Lobby (Sala de Espera)
-Donde los jugadores se reúnen antes de desplegarse en el mapa.
-- **Features:** Gestión de jugadores, botones de **Kick** exclusivos para el Host.
-> [Lobby UI] <img width="1238" height="691" alt="image" src="https://github.com/user-attachments/assets/8a2e226d-cca5-4c78-80d3-fe95d5cca3f3" />
-
-### 3. In-Game HUD & Pause Menu
-La interfaz limpia cuenta con contador de objetos y estados de los jugadores.
-Al presionar `ESC`, se despliega un **Menú de Pausa Sincronizado**:
-- Si el **Host** pausa, el juego se detiene globalmente para todos los clientes (aplicando un freno físico total).
-- Los clientes solo pueden visualizar la pantalla de interrupción o abandonar la partida de forma segura.
-> [Pause Menu] <img width="1265" height="711" alt="image" src="https://github.com/user-attachments/assets/c1b62c10-f6d0-4d8d-89b1-3642d4dc5826" />
-
-### 4. Pantalla de Victoria / Resultados
-Una pantalla autogenerada por código con un *Overlay* oscuro que confirma la recolección absoluta de todos los fragmentos y devuelve automáticamente la sala al Menú.
-> [Victoria]<img width="1421" height="777" alt="image" src="https://github.com/user-attachments/assets/19d16020-5c55-4aba-b7e9-e21ae6199370" />
-
-
-### 5. Pantalla de partida
-Durante la partida se pueden ver los jugadores interactuando dentro el juego en tiempo real
-> [Juego] <img width="1276" height="708" alt="image" src="https://github.com/user-attachments/assets/c1470413-72f7-4766-b2af-62347a834712" />
-
----
-
-## Tecnología y Requisitos
-
-- **Motor Gráfico:** Unity (Soporte Universal Render Pipeline/HDRP - *Especificar versión*).
-- **Lenguaje:** C# (.NET).
-- **Entradas:** **Unity New Input System** (Basado en eventos, previene bloqueos de hardware estáticos).
-- **UI:** Unity UI Toolkit / TextMeshPro.
-- **Sistema Operativo Objetivo:** Windows (Optimizado para sockets Win32) / Multiplataforma.
-
----
-
-## Arquitectura de Red (Sistema UDP)
-
-El manejo multijugador no depende de *Netcode for GameObjects* ni *Mirror*, sino que ha sido **escrito puramente sobre Sockets UDP (`System.Net.Sockets`)**.
-
-### Diagrama de Arquitectura de Red
-*(Ejemplo de diagrama, puedes renderizar esto con Mermaid o reemplazar con una imagen)*
+## Flujo de partida
 
 ```mermaid
-graph TD
-    A[HostNetworkManager] -->|UDP Port: 7777| B((Internet / LAN))
-    B -->|Transmite| C[ClientNetworkHandler 1]
-    B -->|Transmite| D[ClientNetworkHandler 2]
-    
-    C -->|Inputs & Requests| A
-    D -->|Inputs & Requests| A
-    
-    A -->|World Snapshots| C
-    A -->|World Snapshots| D
+stateDiagram-v2
+    [*] --> MainMenu
+    MainMenu --> Lobby: crear host / unirse
+    Lobby --> Playing: host inicia la partida
+    Playing --> MainMenu: salir de la sesión
+    Playing --> MainMenu: victoria por objetivos cumplidos
 ```
 
-- **Host-Authoritative:** El cliente no mueve su posición; envía "Intenciones de Movimiento" (Inputs) al Host. El Host valida los colisionadores y envía de regreso las posiciones absolutas (Snapshots).
-- **Snapshots Constantes:** Se utiliza una cola de mensajes encriptada en Array de *Bytes*. Se interpolan los deltapositions en los clientes para enmascarar latencia (Lag).
-- **Gestión de Desconexión:** Timeouts adaptados a 5 segundos para purgar clientes fantasmas (`DisconnectMessage` y `LeaveSession`).
-
----
-
-## Manejo de Errores y Seguridad
-
-- **UDP ConnectionReset Bug (Windows 10054):** Manejo de problemas nativos de Windows donde se colapsa todo el hilo de escucha cuando un cliente realiza un "Alt+F4". Mitigado forzando el código IOControl de bajo nivel `SIO_UDP_CONNRESET` sobre el socket.
-- **Thread Safety:** Las colas UDP recogen la data en un *background thread* y utilizan candados lógicos (`lock`) y delegaciones concurrentes para trasladar la manipulación de objetos al hilo principal de Unity evitando `InvalidOperationExceptions`.
-- **Precausión de Estados:** Resistencia al presionado simultáneo o spam de menús. Cuando hay una desconexión bruta, la máquina de estados limpia la carga residual (`Time.timeScale` reseteado).
-
----
-
-## Cumplimiento de Arquitectura (Plan vs Realidad)
-
-El desarrollo del juego siguió estrictamente el documento de **Arquitectura y Plan de Desarrollo**, logrando implementar las fases fundamentales de redes y mecánicas:
-
-| Fase de Desarrollo | Estado Actual | Detalles de Implementación en el Proyecto |
-| :--- | :---: | :--- |
-| **Fase 1: Infraestructura** | Completada | Sistema construido con `System.Net.Sockets` (UDP dominante para evitar overhead TCP). Se crearon el `HostNetworkManager`, `ClientNetworkHandler`, una `MessageQueue` Thread-Safe bidireccional y el `PacketSerializer` en binario.
-| **Fase 2: Lobby y Sesiones** | Completada | Máquina de estados completa a través de `GameStateMachine.cs` (Lobby → Playing → MainMenu). Se integraron las interfaces `JoinUI`, visualización de IPs y un sistema de control de clientes (Eventos de Desconexión).
-| **Fase 3: Movimiento en Red** | Completada | **Player-Host Architecture**. Los clientes usan predicción local mientras envían *Inputs* (`PLAYER_INPUT`). El servidor valida físicas y responde con deltas (`WORLD_STATE`). Se usa interpolación para mitigar el lag visual.
-| **Fase 4: Gameplay (Objetos)** | Completada | Implementación determinista en `ItemCounter.cs` y `CollectibleItem.cs`. El recuento es autoritativo (validado en el Host) y radiado a clientes. *Nota: La lógica extendida del pathfinding del Monstruo está en constante evolución.*
-| **Fase 5: Panel Admin (Host)** | Completada | El Host posee privilegios exclusivos: Puede expulsar (*kick*) jugadores desde el Lobby y cuenta con un sistema de pausa absoluta validada en todos los clientes interceptando *GameStateChanges*. 
-| **Fase 6: Ciclo y UI Final** | Completada | Pantalla de victoria autogenerada y sincronizada al encontrar todos los objetos. Regreso seguro al menú liberando congelamiento de hilos (`Time.timeScale`) e interfaces unificadas.
-
----
-
-## Estructura del Proyecto y Scripts Clave
-
-La arquitectura de la carpeta `Assets/` mantiene una separación limpia de responsabilidades:
-
-```text
-The-Lost-Hill/Assets/
-├── _Project/
-│   ├── Scripts/
-│   │   ├── Core/
-│   │   │   ├── GameManager.cs        (Singleton global de estados)
-│   │   │   └── GameStateMachine.cs   (Maneja Lobby -> Playing -> Results)
-│   │   ├── Network/
-│   │   │   ├── Host/
-│   │   │   │   └── HostNetworkManager.cs  (Server autoritativo Socket UDP)
-│   │   │   ├── Client/
-│   │   │   │   └── ClientNetworkHandler.cs (Recepciones y broadcast)
-│   │   │   └── Shared/
-│   │   │       ├── NetworkSpawner.cs      (Proyecta paquetes en GameObjects)
-│   │   │       └── PacketSerializer.cs    (Transforma clases a Bytes)
-│   │   ├── Gameplay/
-│   │   │   └── PlayerControllerM.cs       (Lógica de movimiento e Input System)
-│   │   └── UI/
-│   │       └── HUD/
-│   │           └── PauseMenuUI.cs         (Menús con detección de red)
-├── slenderman/
-│   ├── scrip/
-│   │   ├── ItemCounter.cs                 (Mecánicas de final de juego y sumatorio)
-│   │   └── CollectibleItem.cs
-└── Prefabs/
-└── Scenes/
-    ├── MainScene.unity
-    └── GameplayScene.unity
+```mermaid
+flowchart LR
+    A[MainScene] --> B[BootUI]
+    B --> C{Rol}
+    C -->|Host| D[GameManager.StartHost]
+    C -->|Cliente| E[GameManager.StartClient]
+    D --> F[HostNetworkManager]
+    E --> G[ClientNetworkHandler]
+    F <--> H[(UDP 7777)]
+    G <--> H
+    F --> I[LobbyUI]
+    G --> I
+    I --> J[GameplayScene]
+    J --> K[NetworkSpawner]
+    K --> L[PlayerControllerM]
+    K --> M[ItemCounter / CollectibleItem]
+    K --> N[Enemy]
+    M --> O[Victoria]
+    O --> A
 ```
 
+El lobby vive dentro de la escena principal; no hay una escena de lobby separada.
+
+## Requisitos técnicos
+
+| Componente | Requisito |
+| --- | --- |
+| Motor | Unity 6000.3.8f1 |
+| Lenguaje | C# |
+| Red | Sockets propios sobre UDP (`System.Net.Sockets`) |
+| Puerto por defecto | 7777 |
+| Entrada | Unity Input System |
+| UI | uGUI y TextMeshPro |
+| Render | Universal Render Pipeline |
+| IA y navegación | NavMesh / AI Navigation |
+| Plataforma probada | Windows |
+
+Los paquetes necesarios ya están definidos en `Packages/manifest.json`.
+
+## Cómo ejecutar el sistema
+
+1. Abre `Assets/Scenes/MainScene.unity`.
+2. Ejecuta la escena en el editor o genera un build.
+3. En una instancia, escribe el nombre del jugador y el puerto y pulsa `Create Host`.
+4. En otra instancia, escribe la IP del host, el mismo puerto y pulsa `Join`.
+5. Cuando ambos estén en el lobby, el host pulsa `Start Game`.
+
+### Ejecución local y en red
+
+- Local: usa `127.0.0.1` como IP del cliente.
+- LAN: usa la IP privada del host, por ejemplo `192.168.x.x`.
+- Red externa: abre el puerto UDP `7777` en el firewall y en el router si hace falta.
+
+### Controles básicos
+
+- `WASD` o flechas: moverse.
+- Mouse: mirar.
+- `Shift`: correr.
+- `ESC`: abrir o cerrar la pausa.
+- Acción de interactuar del Input System: recoger objetos.
+
 ---
 
-## Mejores Prácticas y Patrones
+## Capturas
 
-1. **State Machine Pattern:** `GameStateMachine` encapsula todos los procesos duros de control del mundo, reduciendo el código espagueti.
-2. **Singleton Pattern Reestructurado:** Managers estáticos (`GameManager`, `ItemCounter`) se controlan a través de `Awake/OnDestroy` previniendo memory leaks a través de transiciones de escenas.
-3. **Event-Driven UI:** Se evitan consultas pesadas (`Update()`) dentro del código UI. Todos los HUD cambian en respuesta directa a C# `Actions` (ej. `OnMessageReceived`).
-4. **Deterministic Network Flow:** Las IDs recolectables, identificadores únicos de jugadores y orden de instigación se manejan de manera predictiva asegurando una coincidencia exacta de `itemsMap`.
+### Menú principal
+
+![Menú principal](https://github.com/user-attachments/assets/ef72a922-1ed3-4c45-a00b-5801823bc23c)
+
+### Lobby
+
+![Lobby](https://github.com/user-attachments/assets/8a2e226d-cca5-4c78-80d3-fe95d5cca3f3)
+
+### Pausa
+
+![Pausa](https://github.com/user-attachments/assets/c1b62c10-f6d0-4d8d-89b1-3642d4dc5826)
+
+### Victoria
+
+![Victoria](https://github.com/user-attachments/assets/19d16020-5c55-4aba-b7e9-e21ae6199370)
+
+### Partida
+
+![Partida](https://github.com/user-attachments/assets/c1470413-72f7-4766-b2af-62347a834712)
 
 ---
 
-**Creado con y Unity para explorar los límites del código .NET de bajo nivel en videojuegos.**
+## Funcionalidades implementadas
+
+- Creación de partidas como host y unión como cliente con nombre, IP y puerto.
+- Lobby con lista de jugadores, ping visible y botón de inicio solo para el host.
+- Gestión de desconexiones, rechazo por servidor lleno, IP baneada o versión incompatible.
+- Reconexión automática del cliente con retroceso exponencial.
+- Movimiento en primera persona con sprint, cámara y animaciones.
+- Recogida de objetos con contador sincronizado y condición de victoria.
+- Enemigo controlado por el host con patrulla, alerta y persecución sobre NavMesh.
+- Pausa global sincronizada, expulsión de jugadores y baneo persistente por IP.
+- HUD de juego y cambio de estados `MainMenu -> Lobby -> Playing -> MainMenu`.
+- Respawn del jugador tras captura por el enemigo.
+
+---
+
+## Red y sincronización
+
+- El juego no depende de Mirror ni de Netcode for GameObjects para la partida principal.
+- El host valida el estado de la sesión y difunde cambios a los clientes.
+- Los jugadores remotos se suavizan con interpolación y predicción local.
+- El ping, la reconexión y los timeouts están integrados en el cliente.
+- La lista de baneos se guarda en el host para conservar las IP bloqueadas entre sesiones.
+
+---
+
+## Limitaciones conocidas
+
+- No hay host migration; si el host se cierra, la sesión termina.
+- La red no usa cifrado ni autenticación adicional.
+- El timeout de desconexión es corto (5 s), así que una conexión inestable puede expulsar clientes.
+- `GameRulesUI` está preparado, pero todavía no aplica cambios reales al host.
+- `ResultsUI` tiene la interfaz creada, pero la lógica de reinicio y regreso al lobby sigue pendiente.
+- La partida no tiene una escena de lobby separada; el lobby se muestra dentro de `MainScene`.
+
+---
+
+## Estructura del proyecto
+
+| Carpeta | Responsabilidad |
+| --- | --- |
+| `Assets/Scripts/Core/` | `GameManager`, `GameStateMachine`, constantes y carga de escenas. |
+| `Assets/Scripts/Network/Host/` | Servidor, sesiones de cliente, registro de conexiones y lista de baneos. |
+| `Assets/Scripts/Network/Client/` | Cliente, ping y reconexión automática. |
+| `Assets/Scripts/Network/Shared/` | Mensajes, opcodes, serialización y colas thread-safe. |
+| `Assets/Scripts/Network/Sync/` | Interpolación, predicción y extrapolación. |
+| `Assets/Scripts/Gameplay/Player/` | Control del jugador y sincronización de estado. |
+| `Assets/Scripts/Gameplay/Collectibles/` | Coleccionables y lógica de victoria. |
+| `Assets/Scripts/Gameplay/Monster/` | IA del enemigo. |
+| `Assets/Scripts/Admin/` | Kick, ban y pausa del host. |
+| `Assets/Scripts/UI/` | Menú principal, lobby, HUD, pausa, resultados y respawn. |
+
+Escenas principales:
+
+- `Assets/Scenes/MainScene.unity`
+- `Assets/Scenes/GameplayScene.unity`
+
+---
+
+## Scripts clave
+
+- `Assets/Scripts/Core/GameManager.cs`: coordina el rol local y las transiciones de sesión.
+- `Assets/Scripts/Core/GameStateMachine.cs`: cambia entre menú, lobby y gameplay y notifica al resto.
+- `Assets/Scripts/Network/Host/HostNetworkManager.cs`: escucha clientes, responde a conexiones y emite mensajes.
+- `Assets/Scripts/Network/Client/ClientNetworkHandler.cs`: conecta al host, procesa mensajes y maneja reconexión.
+- `Assets/Scripts/Gameplay/NetworkSpawner.cs`: crea y sincroniza jugadores en host y cliente.
+- `Assets/Scripts/Gameplay/Player/PlayerControllerM.cs`: movimiento en primera persona, interacción y respawn.
+- `Assets/Scripts/Gameplay/Monster/Enemy.cs`: IA y persecución del jugador.
+- `Assets/Scripts/Gameplay/ItemCounter.cs`: registra coleccionables, valida la victoria y lanza la salida al menú.
+- `Assets/Scripts/UI/HUD/PauseMenuUI.cs`: abre la pausa, la sincroniza y permite salir de la sesión.
+- `Assets/Scripts/UI/Lobby/LobbyUI.cs`: muestra la lista de jugadores y habilita el inicio solo al host.
+
+## Nota de implementación
+
+La sesión se mantiene en `MainScene` hasta que el host cambia el estado; el servidor no depende de middleware externo y la lógica se divide por módulos para mantener el flujo de red y gameplay separado.
