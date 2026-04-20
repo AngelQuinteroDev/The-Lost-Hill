@@ -37,7 +37,7 @@ El juego cuenta con un flujo completo de menús escalables y adaptados para func
 
 ### 1. Main Menu (Menú Principal)
 Punto de entrada. Permite a los jugadores introducir sus credenciales y elegir si desean crear una nueva partida (Host) o conectarse a una existente apuntando a una IP (Client).
-> ![Main Menu]([docs/images/main_menu_placeholder.png])
+> ![Main Menu](<img width="1296" height="716" alt="image" src="https://github.com/user-attachments/assets/ef72a922-1ed3-4c45-a00b-5801823bc23c" />)
 
 ### 2. Lobby (Sala de Espera)
 Donde los jugadores se reúnen antes de desplegarse en el mapa.
@@ -58,7 +58,6 @@ Una pantalla autogenerada por código con un *Overlay* oscuro que confirma la re
 ### 5. Pantalla de partida
 Durante la partida se pueden ver los jugadores interactuando dentro el juego en tiempo real
 > ![Juego] (<img width="1238" height="691" alt="image" src="https://github.com/user-attachments/assets/f5a7f631-44cd-41f9-9695-54d05eefcf7b" />)
-> ![Pause Menu](<img width="1421" height="777" alt="image" src="https://github.com/user-attachments/assets/24d04fc3-8605-4545-8399-a3517ed44d52" />)
 
 ---
 
