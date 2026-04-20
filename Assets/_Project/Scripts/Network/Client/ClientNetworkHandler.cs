@@ -351,7 +351,7 @@ namespace TheLostHill.Network.Client
                     continue;
                 }
 
-                if (msg is WorldStateMessage || msg is WorldSnapshotMessage || msg is PlayerStateMessage)
+                if (msg is WorldStateMessage || msg is WorldSnapshotMessage || msg is PlayerStateMessage || msg is MonsterStateMessage)
                 {
                     if (NetworkSpawner.Instance == null || !NetworkSpawner.IsClientWorldListenerReady || ShouldBufferWorldStateForLaterGameplay())
                     {

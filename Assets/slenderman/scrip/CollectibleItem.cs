@@ -2,11 +2,11 @@ using UnityEngine;
 
 public class CollectibleItem : MonoBehaviour
 {
-    [Header("Rotación")]
+    [Header("Rotaciï¿½n")]
     public float rotationSpeed = 90f;
     public Vector3 rotationAxis = Vector3.up;
 
-    [Header("Flotación")]
+    [Header("Flotaciï¿½n")]
     public float floatAmplitude = 0.3f;
     public float floatSpeed = 1.5f;
 
@@ -15,6 +15,12 @@ public class CollectibleItem : MonoBehaviour
 
     private Vector3 startPosition;
     private bool collected = false;
+    private int _networkItemId = -1;
+
+    public void InitializeNetworkId(int id)
+    {
+        _networkItemId = id;
+    }
 
     void Start()
     {
@@ -39,14 +45,19 @@ public class CollectibleItem : MonoBehaviour
 
     public void Collect()
     {
+        if (collected || ItemCounter.Instance == null || _networkItemId < 0) return;
+        
+        // Solicita el permiso al Host para recoger el tem a travs de la red
+        ItemCounter.Instance.HandleLocalPickupAttempt(_networkItemId);
+    }
+
+    public void ConfirmCollection()
+    {
         if (collected) return;
         collected = true;
 
         if (indicatorCanvas != null)
             Destroy(indicatorCanvas);
-
-        if (ItemCounter.Instance != null)
-            ItemCounter.Instance.OnItemCollected();
 
         Destroy(gameObject);
     }

@@ -18,9 +18,6 @@ public class PickupIndicator : MonoBehaviour
 
     void Start()
     {
-        GameObject p = GameObject.FindWithTag("Player");
-        if (p != null) player = p.transform;
-
         if (worldCanvas != null)
             worldCanvas.gameObject.SetActive(false);
     }
@@ -29,9 +26,16 @@ public class PickupIndicator : MonoBehaviour
     {
         if (player == null)
         {
-            GameObject p = GameObject.FindWithTag("Player");
-            if (p != null) player = p.transform;
-            return;
+            var pms = FindObjectsByType<PlayerControllerM>(FindObjectsSortMode.None);
+            foreach (var pcmInstance in pms)
+            {
+                if (pcmInstance.IsLocalPlayer)
+                {
+                    player = pcmInstance.transform;
+                    break;
+                }
+            }
+            if (player == null) return;
         }
 
         var pcm = player.GetComponent<PlayerControllerM>();

@@ -274,7 +274,11 @@ namespace TheLostHill.Gameplay
                 });
             }
 
-            return new WorldStateMessage { Players = snapshots.ToArray() };
+            return new WorldStateMessage 
+            { 
+                Players = snapshots.ToArray(),
+                Monster = BuildMonsterSnapshot()
+            };
         }
 
         private void OnHostMessageReceived(NetworkMessage msg)
@@ -404,6 +408,28 @@ namespace TheLostHill.Gameplay
                     _gm.ChangeState(GameState.MainMenu);
                     UnityEngine.SceneManagement.SceneManager.LoadScene(Constants.MainMenuScene);
                     break;
+
+                // Sync the monster from host
+                case MonsterStateMessage monsterState:
+                    HandleMonsterState(monsterState);
+                    break;
+            }
+        }
+
+        private void HandleMonsterState(MonsterStateMessage monsterState)
+        {
+            if (_gm == null || _gm.IsHost) return;
+
+            // Busca al enemigo local
+            if (Enemy.Instance != null)
+            {
+                Enemy.Instance.ApplyRemoteState(
+                    monsterState.PosX,
+                    monsterState.PosY,
+                    monsterState.PosZ,
+                    monsterState.RotY,
+                    monsterState.State
+                );
             }
         }
 
@@ -416,6 +442,17 @@ namespace TheLostHill.Gameplay
                 ApplyPlayerColor(p.PlayerId, p.ColorIndex);
                 ApplyRemoteAnimationState(p.PlayerId, p.IsMoving, p.IsRunning, p.IsPickingUp, p.IsAlive);
             }
+
+            if (Enemy.Instance != null)
+            {
+                Enemy.Instance.ApplyRemoteState(
+                    snap.Monster.PosX, 
+                    snap.Monster.PosY, 
+                    snap.Monster.PosZ, 
+                    snap.Monster.RotY, 
+                    snap.Monster.State
+                );
+            }
         }
 
         private void HandleWorldState(WorldStateMessage world)
@@ -426,6 +463,17 @@ namespace TheLostHill.Gameplay
                 ApplyRemotePlayerState(p.PlayerId, p.PosX, p.PosY, p.PosZ, p.RotY);
                 ApplyPlayerColor(p.PlayerId, p.ColorIndex);
                 ApplyRemoteAnimationState(p.PlayerId, p.IsMoving, p.IsRunning, p.IsPickingUp, p.IsAlive);
+            }
+
+            if (Enemy.Instance != null && world.Monster.PosY != 0) // PosY=0 check as fallback
+            {
+                Enemy.Instance.ApplyRemoteState(
+                    world.Monster.PosX, 
+                    world.Monster.PosY, 
+                    world.Monster.PosZ, 
+                    world.Monster.RotY, 
+                    world.Monster.State
+                );
             }
         }
 
@@ -525,10 +573,33 @@ namespace TheLostHill.Gameplay
                 });
             }
 
-            return new WorldSnapshotMessage
+            var snap = new WorldSnapshotMessage
             {
                 Players = snapshots.ToArray(),
+                Monster = BuildMonsterSnapshot(),
                 CurrentGameState = (byte)GameState.Playing
+            };
+
+            if (ItemCounter.Instance != null && snap.CurrentGameState == (byte)GameState.Playing)
+            {
+                snap.CollectedItemIds = ItemCounter.Instance.GetCollectedItemIds();
+                snap.TotalItems = ItemCounter.Instance.TotalItems;
+            }
+
+            return snap;
+        }
+
+        private MonsterSnapshot BuildMonsterSnapshot()
+        {
+            if (Enemy.Instance == null) return new MonsterSnapshot();
+
+            return new MonsterSnapshot
+            {
+                PosX = Enemy.Instance.transform.position.x,
+                PosY = Enemy.Instance.transform.position.y,
+                PosZ = Enemy.Instance.transform.position.z,
+                RotY = Enemy.Instance.transform.eulerAngles.y,
+                State = 0 // Sent via MonsterStateMessage natively now, or can be fetched if needed
             };
         }
 

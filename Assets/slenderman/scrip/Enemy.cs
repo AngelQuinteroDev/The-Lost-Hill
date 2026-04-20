@@ -1,5 +1,8 @@
 ﻿using UnityEngine;
 using UnityEngine.AI;
+using TheLostHill.Core;
+using TheLostHill.Network.Shared;
+using TheLostHill.Network.Sync;
 
 [RequireComponent(typeof(NavMeshAgent), typeof(Animator))]
 public class Enemy : MonoBehaviour
@@ -37,25 +40,72 @@ public class Enemy : MonoBehaviour
     private enum State { Patrolling, WaitingAtWaypoint, Alert, Chasing }
     private State currentState = State.Patrolling;
 
+    [Header("Network (Auto)")]
+    private InterpolationSystem _interpolation;
+    private bool _isHost = true;
+    private float _lastSendTime;
+    private const float NetworkSendRate = 1f / 20f; // 20 times per second
+
+    public static Enemy Instance { get; private set; }
+
+    private void Awake()
+    {
+        if (Instance != null) { Destroy(gameObject); return; }
+        Instance = this;
+
+        _interpolation = GetComponent<InterpolationSystem>();
+        if (_interpolation == null)
+            _interpolation = gameObject.AddComponent<InterpolationSystem>();
+    }
+
     void Start()
     {
         anim = GetComponent<Animator>();
         agent = GetComponent<NavMeshAgent>();
 
-        GameObject[] objs = GameObject.FindGameObjectsWithTag(waypointTag);
-        waypoints = new Transform[objs.Length];
-        for (int i = 0; i < objs.Length; i++)
-            waypoints[i] = objs[i].transform;
+        // Determine if we are Host or Client
+        if (GameManager.Instance != null)
+        {
+            _isHost = GameManager.Instance.IsHost;
+        }
 
-        if (waypoints.Length == 0)
-            Debug.LogWarning("[Enemy] No se encontraron waypoints con tag: " + waypointTag);
+        if (!_isHost)
+        {
+            // Client: Disable NavMeshAgent so interpolation can take over freely
+            if (agent != null) agent.enabled = false;
+            // Also stop reading Root Motion if any
+            if (anim != null) anim.applyRootMotion = false;
+        }
+        else
+        {
+            // Host logic setup
+            GameObject[] objs = GameObject.FindGameObjectsWithTag(waypointTag);
+            waypoints = new Transform[objs.Length];
+            for (int i = 0; i < objs.Length; i++)
+                waypoints[i] = objs[i].transform;
 
-        GoToRandomWaypoint();
-        SetState(State.Patrolling);
+            if (waypoints.Length == 0)
+                Debug.LogWarning("[Enemy] No se encontraron waypoints con tag: " + waypointTag);
+
+            GoToRandomWaypoint();
+            SetState(State.Patrolling);
+        }
+    }
+
+    private void OnDestroy()
+    {
+        if (Instance == this) Instance = null;
     }
 
     void Update()
     {
+        if (!_isHost)
+        {
+            // Client mode relies entirely on InterpolationSystem (attached)
+            // Just sync animations locally based on current simulated velocity or received states
+            return; 
+        }
+
         Transform detected = FindNearest("Player", alertRadius);
 
         switch (currentState)
@@ -77,6 +127,53 @@ public class Enemy : MonoBehaviour
             case State.Chasing:
                 HandleChase();
                 break;
+        }
+
+        SyncStateToClients();
+    }
+
+    private void SyncStateToClients()
+    {
+        if (!_isHost || GameManager.Instance == null || GameManager.Instance.HostManager == null) return;
+        
+        if (Time.unscaledTime - _lastSendTime < NetworkSendRate) return;
+        _lastSendTime = Time.unscaledTime;
+
+        // Construye el mensaje con los datos del enemigo
+        var msg = new MonsterStateMessage
+        {
+            SenderId = 0, // Host
+            Timestamp = Time.unscaledTime,
+            PosX = transform.position.x,
+            PosY = transform.position.y,
+            PosZ = transform.position.z,
+            RotY = transform.eulerAngles.y,
+            State = (byte)currentState
+        };
+
+        GameManager.Instance.HostManager.Broadcast(msg);
+    }
+
+    public void ApplyRemoteState(float posX, float posY, float posZ, float rotY, byte stateByte)
+    {
+        if (_isHost) return;
+
+        // Set state for animations
+        State newState = (State)stateByte;
+        if (currentState != newState)
+        {
+            SetState(newState);
+        }
+
+        // Interpolate transform
+        if (_interpolation != null)
+        {
+            _interpolation.AddSnapshot(new Vector3(posX, posY, posZ), rotY, Time.time);
+        }
+        else
+        {
+            transform.position = new Vector3(posX, posY, posZ);
+            transform.rotation = Quaternion.Euler(0, rotY, 0);
         }
     }
 
